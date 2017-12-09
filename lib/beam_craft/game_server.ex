@@ -8,4 +8,9 @@ defmodule BeamCraft.GameServer do
   def init(:ok) do
     {:ok, %{}}
   end
+
+  # handle login
+  def handle_call({username, password}, state}) do
+    {:ok, { "server name", "server motd", :usertype_regular }, state}
+  end
 end
