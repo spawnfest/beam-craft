@@ -8,6 +8,7 @@ defmodule BeamCraft.Application do
   def start(_type, _args) do
     # List all child processes to be supervised
     children = [
+      {BeamCraft.GameServer, [name: BeamCraft.GameServer] }
       # Starts a worker by calling: BeamCraft.Worker.start_link(arg)
       # {BeamCraft.Worker, arg},
     ]
