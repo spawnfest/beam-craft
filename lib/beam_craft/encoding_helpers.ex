@@ -22,7 +22,7 @@ defmodule BeamCraft.EncodingHelpers do
    * Set Block (ID: 6): `{:set_block,  x, y, z, block_type}`
    * Position Player (ID: 8): `{:position_player, player_id, x, y, z, yaw, pitch}`
    * Despawn Player (ID: 12): `{:despawn_player, player_id}`
-   * Message (ID: 13): `{:message, player_id, message}`
+   * Message Player (ID: 13): `{:message_player, player_id, message}`
   """
 
   # Server Info
@@ -78,13 +78,13 @@ defmodule BeamCraft.EncodingHelpers do
     <<12, player_id :: signed-big-integer-size(8)>>
   end
   
-  # Message
-  def encode_packet({:message, player_id, message}) do
+  # Message Player
+  def encode_packet({:message_player, player_id, message}) do
     <<13, player_id :: signed-big-integer-size(8), String.pad_trailing(message, 64) :: binary>>
   end
 
-  def encode_packet(_) do
-    raise "Can't build packet"
+  def encode_packet(arg) do
+    raise "Can't build packet with `#{inspect arg}`"
   end
 
   @spec chunk_map(list(integer)) :: list(binary)
