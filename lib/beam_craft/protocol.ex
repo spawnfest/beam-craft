@@ -62,7 +62,7 @@ defmodule BeamCraft.Protocol do
 
     # Spawn the player
     transport.send(socket, Encoding.encode_packet({:spawn_player, 255, player.username, player.x, player.y, player.z, player.pitch, player.yaw}))
-    
+
     :ok
   end
 

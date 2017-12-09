@@ -1,5 +1,35 @@
+defmodule BeamCraft.World do
+  @default_width 16
+  @default_length 16
+  @default_height 8
+
+  defstruct width: @default_width, length: @default_length, height: @default_height, data: <<>>
+
+  def world_init() do
+    land = Binary.copy(<<0x09>>, @default_width * @default_length * @default_height)
+
+    # fill stone (height = 0 to 19)
+
+    # fill dirt (height = 20 to 24)
+
+    # fill grass (height = 25)
+
+    # add foiliage (height = 26)
+
+
+    %__MODULE__{data: land}
+  end
+
+  def set_block( map_data, x, y, z, t) do
+  end
+
+  def get_block( x, y, z) do
+  end
+end
+
 defmodule BeamCraft.GameServer do
   use GenServer
+  alias BeamCraft.World
 
   @server_name "Beam Craft Server"
   @server_motd "This is a test server!"
@@ -9,7 +39,9 @@ defmodule BeamCraft.GameServer do
   end
 
   defmodule State do
-    defstruct clients: [], player_id_pool: (for i <- 1..127, do: i)
+    alias BeamCraft.GameServer
+    defstruct clients: [], player_id_pool: (for i <- 1..127, do: i),
+              world: World.world_init()
   end
 
   def start_link(opts) do
@@ -63,7 +95,7 @@ defmodule BeamCraft.GameServer do
 
   def handle_call({:destroy_block, x, y, z, _block_type}, {_from_pid, _from_ref}, state) do
     send_packet_to_all(state, {:set_block,  x, y, z, 0})
-    
+
     {:reply, :ok, state}
   end
 
@@ -72,20 +104,15 @@ defmodule BeamCraft.GameServer do
 
     new_state = %{state | clients: List.delete_at(state.clients, sender_idx), player_id_pool: [sender.player_id] ++ state.player_id_pool }
     send_packet_to_all(new_state, {:despawn_player, sender.player_id})
-    
+
     {:reply, :ok, new_state}
   end
 
   # fetching map details
   def handle_call({:get_map_details}, {_from_ref, _from_pid}, state) do
-    length = 32
-    width = 32
-    height = 32
-    # This is a large block of water
-    map_data = for _ <- 1..(length * width * height), do: 9
-
+    world = state.world
     {:reply,
-      {length, width, height, map_data},
+      {world.length, world.width, world.height, world.data},
       state}
   end
 
@@ -140,11 +167,11 @@ defmodule BeamCraft.GameServer do
 
     {sender, sender_idx}
   end
-  
+
   defp send_packet_to_all(state, packet) do
      for c <- state.clients, do: send(c.pid, {:send_packet, packet})
   end
-  
+
   defp player_to_spawn_msg(player) do
     {:spawn_player, player.player_id, player.username, player.x, player.y, player.z, player.yaw, player.pitch}
   end
@@ -152,4 +179,5 @@ defmodule BeamCraft.GameServer do
   defp player_to_update_position_msg(player) do
     {:position_player, player.player_id, player.x, player.y, player.z, player.yaw, player.pitch}
   end
+
 end
