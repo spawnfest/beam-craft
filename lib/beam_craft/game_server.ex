@@ -80,6 +80,7 @@ defmodule BeamCraft.GameServer do
     {:reply, :ok, new_state}
   end
 
+  # fetching map details
   def handle_call({:do_get_map_details}, from, state) do
     length = 32
     width = 32
