@@ -138,9 +138,9 @@ defmodule BeamCraft.Protocol do
 
     <<8,
     player_id :: signed-big-integer-size(8),
-    x::signed-big-integer-size(16),
-    y::signed-big-integer-size(16),
-    z::signed-big-integer-size(16),
+    ix::signed-big-integer-size(16),
+    iy::signed-big-integer-size(16),
+    iz::signed-big-integer-size(16),
     yaw::size(8),
     pitch::size(8)>>
   end
