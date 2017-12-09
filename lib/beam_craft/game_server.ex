@@ -25,4 +25,15 @@ defmodule BeamCraft.GameServer do
     server_pid = :erlang.whereis(__MODULE__)
     GenServer.call( server_pid, {username, password})
   end
+
+  # TODO: Back this against the state of the game world
+  def get_map_details do
+    length = 32
+    width = 32
+    height = 32
+    # This is a large block of water
+    map_data = for _ <- 1..(length * width * height), do: 9
+    
+    {length, width, height, map_data}
+  end
 end
