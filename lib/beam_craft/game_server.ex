@@ -1,13 +1,16 @@
 defmodule BeamCraft.World do
-  @default_width 16
-  @default_length 16
-  @default_height 8
+  @default_width 3
+  @default_length 3
+  @default_height 3
 
   defstruct width: @default_width, length: @default_length, height: @default_height, data: <<>>
 
   def world_init() do
-    land = Binary.copy(<<0x09>>, @default_width * @default_length * @default_height)
+    world = %__MODULE__{
+      data: Binary.copy(<<0x09>>, @default_width * @default_length * @default_height)
+    }
 
+    {:ok, world, _} = set_block(world, 0,0,0, 6)
     # fill stone (height = 0 to 19)
 
     # fill dirt (height = 20 to 24)
@@ -15,12 +18,29 @@ defmodule BeamCraft.World do
     # fill grass (height = 25)
 
     # add foiliage (height = 26)
+    world
+  end
 
-
-    %__MODULE__{data: land}
+  defp set_binary_at(binary, position, value) do
+    case Binary.split_at(binary, position) do
+      {f,""} -> # the last or clamped position
+        <<f::binary, value::size(8)>>
+      {f,<<first::size(8),rest::binary>>} ->
+        <<f::binary, value::size(8), rest::binary>>
+    end
   end
 
   def set_block( world, x, y, z, t) do
+    if is_valid_block_position?( world, x, y, z ) do
+      idx = get_index_for_block_position(world.width, world.length, world.height, x,y,z)
+      IO.puts "OLD #{inspect world.data, pretty: true}"
+      old_type = Binary.at(world.data, idx)
+      new_world = set_binary_at(world.data,idx, t)
+      IO.puts "NEW #{inspect new_world, pretty: true}"
+      {:ok, %{world|data: new_world}, old_type }
+    else
+      {:error, :invalid_block_position}
+    end
   end
 
   def get_block( world, x, y, z) do
@@ -46,10 +66,10 @@ defmodule BeamCraft.World do
     x + y * (w) + z *(w*l)
   end
 
-  def is_valid_block_position?( %World{data: data, width: w, height: h, length: l},
+  def is_valid_block_position?( %__MODULE__{data: data, width: w, height: h, length: l},
                                  x, y, z)
     when is_integer(x) and is_integer(y) and is_integer(z)
-    and x > 0 and y > 0 and z > 0
+    and x >= 0 and y >= 0 and z >= 0
   do
     x < w and y < l and z < h
   end
