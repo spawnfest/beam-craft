@@ -1,12 +1,12 @@
 defmodule BeamCraft.EncodingHelpers do
   @moduledoc """
-  Utility methods used by BeamCraft.Protocol to encode packets received 
-  from the client. A reference describing the structure of each packet 
+  Utility methods used by BeamCraft.Protocol to encode packets received
+  from the client. A reference describing the structure of each packet
   is available at [wiki.vg](http://wiki.vg/Classic_Protocol).
-  
+
   See `BeamCraft.DecoingHelpers` for the field definitions.
   """
-  
+
   @chunk_size 1024
 
   @spec encode_packet(tuple()) :: binary()
@@ -35,7 +35,7 @@ defmodule BeamCraft.EncodingHelpers do
   def encode_packet({:map_initialize}) do
     <<2>>
   end
- 
+
   # Map Chunk
   def encode_packet({:map_chunk, data, index}) do
     pad_size = (@chunk_size - byte_size(data)) * 8
@@ -49,7 +49,7 @@ defmodule BeamCraft.EncodingHelpers do
     ix = round(x * 32)
     iy = round(y * 32)
     iz = round(z * 32)
-    
+
     <<7, player_id :: signed-big-integer-size(8), String.pad_trailing(player_name, 64) :: binary, ix :: signed-big-integer-size(16), iy :: signed-big-integer-size(16), iz :: signed-big-integer-size(16), yaw, pitch>>
   end
 
@@ -69,7 +69,7 @@ defmodule BeamCraft.EncodingHelpers do
     ix = round(x * 32)
     iy = round(y * 32)
     iz = round(z * 32)
-    
+
     <<8, player_id :: signed-big-integer-size(8), ix :: unsigned-big-integer-size(16), iy :: unsigned-big-integer-size(16), iz :: unsigned-big-integer-size(16), yaw, pitch>>
   end
 
@@ -77,7 +77,7 @@ defmodule BeamCraft.EncodingHelpers do
   def encode_packet({:despawn_player, player_id}) do
     <<12, player_id :: signed-big-integer-size(8)>>
   end
-  
+
   # Message Player
   def encode_packet({:message_player, player_id, message}) do
     <<13, player_id :: signed-big-integer-size(8), String.pad_trailing(message, 64) :: binary>>
@@ -89,12 +89,11 @@ defmodule BeamCraft.EncodingHelpers do
 
   @spec chunk_map(list(integer)) :: list(binary)
   @doc """
-  Takes a raw map array and converts it into a list of map chunk packets to send to 
+  Takes a raw map array and converts it into a list of map chunk packets to send to
   the client.
   """
-  def chunk_map(map) do
-    map_bin = :binary.list_to_bin(map)
-    data = :zlib.gzip(<<length(map) :: unsigned-big-integer-size(32), map_bin :: binary>>)
+  def chunk_map(map_bin) do
+    data = :zlib.gzip(<< byte_size(map_bin) :: unsigned-big-integer-size(32), map_bin :: binary>>)
 
     chunks = chunk_map(data, [])
 

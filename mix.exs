@@ -23,6 +23,7 @@ defmodule BeamCraft.Mixfile do
   defp deps do
     [
       {:ranch, "~> 1.4.0"},
+      {:binary, "~> 0.0.4"},
       {:ex_doc, "~> 0.16", only: :dev},
       {:dialyxir, "~> 0.5", only: [:dev], runtime: false}
     ]

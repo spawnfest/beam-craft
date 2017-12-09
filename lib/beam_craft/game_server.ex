@@ -1,5 +1,116 @@
+defmodule BeamCraft.World do
+  @default_width 32
+  @default_length 32
+  @default_height 32
+
+  defstruct width: @default_width, length: @default_length, height: @default_height, data: <<>>
+
+  def world_init() do
+    world = %__MODULE__{
+      data: Binary.copy(<<0x00>>, @default_width * @default_length * @default_height)
+    }
+
+    {:ok, world, _} = set_block(world, 0,0,0, 6)
+    # fill stone (height = 0 to 19)
+    world = Enum.reduce(
+              generate_cube_coords(0,0,0,@default_width,@default_length,20),
+              world,
+              fn({x,y,z},world)->
+                {:ok, new_world, _} =set_block(world,x,y,z, 1)
+                new_world
+              end)
+
+    # fill dirt (height = 20 to 24)
+    world = Enum.reduce(
+              generate_cube_coords(0,0,20,@default_width,@default_length,4),
+              world,
+              fn({x,y,z},world)->
+                {:ok, new_world, _} =set_block(world,x,y,z, 3)
+                new_world
+              end)
+
+    # fill grass (height = 25)
+    world = Enum.reduce(
+              generate_cube_coords(0,0,24,@default_width,@default_length,1),
+              world,
+              fn({x,y,z},world)->
+                {:ok, new_world, _} =set_block(world,x,y,z, 2)
+                new_world
+              end)
+
+    # add foiliage (height = 26)
+    world
+  end
+
+  def generate_cube_coords(xoff,yoff,zoff,l,w,h) do
+    for ycoord <-yoff..yoff+w-1,
+        zcoord <-zoff..zoff+h-1,
+        xcoord <-xoff..xoff+l-1,
+         do:
+          {xcoord,ycoord,zcoord}
+  end
+
+  defp set_binary_at(binary, position, value) do
+    case Binary.split_at(binary, position) do
+      {f,""} -> # the last or clamped position
+        <<f::binary, value::size(8)>>
+      {f,<<first::size(8),rest::binary>>} ->
+        <<f::binary, value::size(8), rest::binary>>
+    end
+  end
+
+  def set_block( world, x, y, z, t) do
+    if is_valid_block_position?( world, x, y, z ) do
+      idx = get_index_for_block_position(world.width, world.length, world.height, x,y,z)
+      old_type = Binary.at(world.data, idx)
+      new_world = set_binary_at(world.data,idx, t)
+      {:ok, %{world|data: new_world}, old_type }
+    else
+      {:error, :invalid_block_position}
+    end
+  end
+
+  def get_block( world, x, y, z) do
+    if is_valid_block_position?( world, x, y, z ) do
+      block_type = Binary.at(world.data,
+                             get_index_for_block_position(world.width,
+                                                          world.length,
+                                                          world.height,
+                                                          x,y,z))
+      {:ok, block_type}
+    else
+      {:error, :invalid_block_position}
+    end
+  end
+
+  @doc """
+  Gets the offset (in bytes) of the block for a given block at x,y,z in a world
+  of size w,l,h.
+
+  *This must be protected by `is_valid_block_position?` or simlar.*
+  """
+  defp get_index_for_block_position( w, l, h, x, y, z) do
+    x + y* (w) + z *(w*l)
+  end
+
+  def is_valid_block_position?( %__MODULE__{data: data, width: w, height: h, length: l},
+                                 x, y, z)
+    when is_integer(x) and is_integer(y) and is_integer(z)
+    and x >= 0 and y >= 0 and z >= 0
+  do
+    x < w and y < h and z < l
+  end
+  def is_valid_block_position?( _world, _x, _y, _z), do: false
+
+end
+
 defmodule BeamCraft.GameServer do
+  @default_width 32
+  @default_length 32
+  @default_height 32
+
   use GenServer
+  alias BeamCraft.World
 
   @server_name "Beam Craft Server"
   @server_motd "This is a test server!"
@@ -9,7 +120,9 @@ defmodule BeamCraft.GameServer do
   end
 
   defmodule State do
-    defstruct clients: [], player_id_pool: (for i <- 1..127, do: i)
+    alias BeamCraft.GameServer
+    defstruct clients: [], player_id_pool: (for i <- 1..127, do: i),
+              world: World.world_init()
   end
 
   def start_link(opts) do
@@ -20,9 +133,14 @@ defmodule BeamCraft.GameServer do
     {:ok, %State{}}
   end
 
+  def pick_spawn_point() do
+    {1.0,@default_height-1.6,1.0}
+  end
+
   # handle login
   def handle_call({:login, username, _password}, {from_pid, _from_ref}, %{player_id_pool: [player_id|rest_pool]} = state) do
-    player = %Player{pid: from_pid, player_id: player_id, username: username, x: 16.0, y: 1.6, z: 16.0, pitch: 0, yaw: 0, player_type: :regular}
+    {spawnx,spawny,spawnz} = pick_spawn_point()
+    player = %Player{pid: from_pid, player_id: player_id, username: username, x: spawnx, y: spawny, z: spawnz, pitch: 0, yaw: 0, player_type: :regular}
 
     # Tell every connected client that a new player has joined
     send_packet_to_all(state, player_to_spawn_msg(player))
@@ -63,7 +181,7 @@ defmodule BeamCraft.GameServer do
 
   def handle_call({:destroy_block, x, y, z, _block_type}, {_from_pid, _from_ref}, state) do
     send_packet_to_all(state, {:set_block,  x, y, z, 0})
-    
+
     {:reply, :ok, state}
   end
 
@@ -72,20 +190,15 @@ defmodule BeamCraft.GameServer do
 
     new_state = %{state | clients: List.delete_at(state.clients, sender_idx), player_id_pool: [sender.player_id] ++ state.player_id_pool }
     send_packet_to_all(new_state, {:despawn_player, sender.player_id})
-    
+
     {:reply, :ok, new_state}
   end
 
   # fetching map details
   def handle_call({:get_map_details}, {_from_ref, _from_pid}, state) do
-    length = 32
-    width = 32
-    height = 32
-    # This is a large block of water
-    map_data = for _ <- 1..(length * width * height), do: 9
-
+    world = state.world
     {:reply,
-      {length, width, height, map_data},
+      {world.length, world.width, world.height, world.data},
       state}
   end
 
@@ -140,11 +253,11 @@ defmodule BeamCraft.GameServer do
 
     {sender, sender_idx}
   end
-  
+
   defp send_packet_to_all(state, packet) do
      for c <- state.clients, do: send(c.pid, {:send_packet, packet})
   end
-  
+
   defp player_to_spawn_msg(player) do
     {:spawn_player, player.player_id, player.username, player.x, player.y, player.z, player.yaw, player.pitch}
   end
@@ -152,4 +265,5 @@ defmodule BeamCraft.GameServer do
   defp player_to_update_position_msg(player) do
     {:position_player, player.player_id, player.x, player.y, player.z, player.yaw, player.pitch}
   end
+
 end
