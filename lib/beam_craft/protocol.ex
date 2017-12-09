@@ -34,7 +34,7 @@ defmodule BeamCraft.Protocol do
 	      packet = build_packet(payload)
 	      transport.send(socket, packet)
 	      loop(socket, transport, old_data)
-      _any ->
+      any ->
         IO.puts("Got unhandled message #{inspect any, pretty: true}")
         loop(socket, transport, old_data)
     end
