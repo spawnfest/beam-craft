@@ -28,13 +28,13 @@ defmodule BeamCraft.Protocol do
 	{:ok, message, next_data} = receive_packet(old_data <> new_data)
 	:ok = handle_packet(socket, transport, message)
 	loop(socket, transport, next_data)
-      {:tcp_close, ^socket} ->
-	IO.puts "[STUB]: Disconnect user"
-      {:send_message, msg} ->
-	packet = build_packet(msg)
+      {:tcp_closed, ^socket} ->
+	BeamCraft.GameServer.logout()
+      {:send_packet, payload} ->
+	packet = build_packet(payload)
 	transport.send(socket, packet)
 	loop(socket, transport, old_data)
-      any ->
+      _any ->
 	loop(socket, transport, old_data)
     end
   end
@@ -58,9 +58,9 @@ defmodule BeamCraft.Protocol do
   
   # Player Position
   defp receive_packet(<<8, player_id :: signed-big-integer-size(8), ex :: unsigned-big-integer-size(16), ey :: unsigned-big-integer-size(16), ez :: unsigned-big-integer-size(16), yaw, pitch, rest :: binary>>) do
-    x = ex/16
-    y = ey/16
-    z = ez/16
+    x = ex/32
+    y = ey/32
+    z = ez/32
 
     packet = {:player_position, player_id, x, y, z, yaw, pitch}
     {:ok, packet, rest}
@@ -109,14 +109,35 @@ defmodule BeamCraft.Protocol do
     <<4, length :: unsigned-big-integer-size(16), width :: unsigned-big-integer-size(16), height :: unsigned-big-integer-size(16)>>
   end
   
+  defp build_packet({:message, player_id, message}) do
+    <<13, player_id :: signed-big-integer-size(8), String.pad_trailing(message, 64) :: binary>>
+  end
+
+  defp build_packet({:position_player, player_id, x, y, z, yaw, pitch}) do
+    # Encode palayer position with 5 degrees of precision
+    ix = round(x * 32)
+    iy = round(y * 32)
+    iz = round(z * 32)
+    
+    <<8, player_id :: signed-big-integer-size(8), ix :: unsigned-big-integer-size(16), iy :: unsigned-big-integer-size(16), iz :: unsigned-big-integer-size(16), yaw, pitch>>
+  end
+
+  defp build_packet({:set_block,  x, y, z, block_type}) do
+    <<6, x :: unsigned-big-integer-size(16), y :: unsigned-big-integer-size(16), z :: unsigned-big-integer-size(16), block_type>>
+  end
+
+  defp build_packet({:despawn_player, player_id}) do
+    <<12, player_id :: signed-big-integer-size(8)>>
+  end
+  
   defp build_packet(any) do
     raise "Can't build a packet for: #{inspect any}"
   end
 
   defp handle_packet(socket, transport, {:login, username, password}) do
     # Log the user in
-    {server_name, motd, type} = BeamCraft.GameServer.login(username, password)
-    login_packet = build_packet({:server_info, server_name, motd, type})
+    {:ok, server_name, motd, player} = BeamCraft.GameServer.login(username, password)
+    login_packet = build_packet({:server_info, server_name, motd, player.player_type})
     transport.send(socket, login_packet)
 
     # Send the map   
@@ -135,9 +156,25 @@ defmodule BeamCraft.Protocol do
 
     # TODO: this data should come from login
     # Spawn the player
-    transport.send(socket, build_packet({:spawn_player, 255, username, 16, 16, 16, 0, 0}))
+    transport.send(socket, build_packet({:spawn_player, 255, player.username, player.x, player.y, player.z, player.pitch, player.yaw}))
     
     :ok
+  end
+  
+  defp handle_packet(_, _, {:message, message}) do
+    BeamCraft.GameServer.send_message(message)    
+  end
+
+  defp handle_packet(_, _, {:player_position, _player_id, x, y, z, yaw, pitch}) do
+    BeamCraft.GameServer.update_position(x, y, z, yaw, pitch)
+  end
+
+  defp handle_packet(_, _, {:block_created, x, y, z, block_type}) do
+    BeamCraft.GameServer.create_block(x, y, z, block_type)
+  end
+
+  defp handle_packet(_, _, {:block_destroyed, x, y, z, block_type}) do
+    BeamCraft.GameServer.destroy_block(x, y, z, block_type)
   end
   
   defp handle_packet(_, _, _) do
