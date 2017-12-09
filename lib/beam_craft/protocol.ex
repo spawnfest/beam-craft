@@ -25,17 +25,18 @@ defmodule BeamCraft.Protocol do
 
     receive do
       {:tcp, ^socket, new_data} ->
-	{:ok, message, next_data} = receive_packet(old_data <> new_data)
-	:ok = handle_packet(socket, transport, message)
-	loop(socket, transport, next_data)
+        {:ok, message, next_data} = receive_packet(old_data <> new_data)
+	      :ok = handle_packet(socket, transport, message)
+	      loop(socket, transport, next_data)
       {:tcp_closed, ^socket} ->
-	BeamCraft.GameServer.logout()
+        BeamCraft.GameServer.logout()
       {:send_packet, payload} ->
-	packet = build_packet(payload)
-	transport.send(socket, packet)
-	loop(socket, transport, old_data)
+	      packet = build_packet(payload)
+	      transport.send(socket, packet)
+	      loop(socket, transport, old_data)
       _any ->
-	loop(socket, transport, old_data)
+        IO.puts("Got unhandled message #{inspect any, pretty: true}")
+        loop(socket, transport, old_data)
     end
   end
 
