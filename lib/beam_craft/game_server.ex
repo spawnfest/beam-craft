@@ -3,6 +3,7 @@ defmodule BeamCraft.GameServer do
 
   @server_name "Beam Craft Server"
   @server_motd "This is a test server!"
+  @tick_rate 100
 
   defmodule Player do
     defstruct [:pid, :player_id, :username, :x, :y, :z, :pitch, :yaw, :player_type]
@@ -17,13 +18,26 @@ defmodule BeamCraft.GameServer do
   end
 
   def init(:ok) do
+    :erlang.send_after(@tick_rate, self(), :tick)
     {:ok, %State{}}
+  end
+
+  defp tick_logic(state) do
+    #TODO Tick game logic in here
+    state
+  end
+
+  # tick game logic
+  def handle_info(:tick, state) do
+    new_state = tick_logic(state)
+    :erlang.send_after(@tick_rate, self(), :tick)
+    {:noreply, new_state}
   end
 
   # handle login
   def handle_call({:login, username, _password}, {from_pid, _from_ref}, %{player_id_pool: [player_id|rest_pool]} = state) do
     {spawn_x, spawn_y, spawn_z} = BeamCraft.MapServer.get_default_spawn()
-    
+
     player = %Player{pid: from_pid, player_id: player_id, username: username, x: spawn_x, y: spawn_y, z: spawn_z, pitch: 0, yaw: 0, player_type: :regular}
 
     # Tell every connected client that a new player has joined
