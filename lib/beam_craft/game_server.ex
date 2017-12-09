@@ -20,11 +20,41 @@ defmodule BeamCraft.World do
     %__MODULE__{data: land}
   end
 
-  def set_block( map_data, x, y, z, t) do
+  def set_block( world, x, y, z, t) do
   end
 
-  def get_block( x, y, z) do
+  def get_block( world, x, y, z) do
+    if is_valid_block_position?( world, x, y, z ) do
+      block_type = Binary.at(world.data,
+                             get_index_for_block_position(world.width,
+                                                          world.length,
+                                                          world.height,
+                                                          x,y,z))
+      {:ok, block_type}
+    else
+      {:error, :invalid_block_position}
+    end
   end
+
+  @doc """
+  Gets the offset (in bytes) of the block for a given block at x,y,z in a world
+  of size w,l,h.
+
+  *This must be protected by `is_valid_block_position?` or simlar.*
+  """
+  defp get_index_for_block_position( w, l, h, x, y, z) do
+    x + y * (w) + z *(w*l)
+  end
+
+  def is_valid_block_position?( %World{data: data, width: w, height: h, length: l},
+                                 x, y, z)
+    when is_integer(x) and is_integer(y) and is_integer(z)
+    and x > 0 and y > 0 and z > 0
+  do
+    x < w and y < l and z < h
+  end
+  def is_valid_block_position?( _world, _x, _y, _z), do: false
+
 end
 
 defmodule BeamCraft.GameServer do
