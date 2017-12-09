@@ -7,7 +7,8 @@ defmodule BeamCraft.Application do
     import Supervisor.Spec, warn: false
 
     children = [
-      {BeamCraft.GameServer, [name: BeamCraft.GameServer] },
+      {BeamCraft.GameServer, [name: BeamCraft.GameServer]},
+      {BeamCraft.MapServer, [name: BeamCraft.MapServer]},
       worker(BeamCraft.RanchLink, [])
     ]
 
