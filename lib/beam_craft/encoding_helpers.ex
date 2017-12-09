@@ -16,6 +16,7 @@ defmodule BeamCraft.EncodingHelpers do
 
   It supports:
    * Server Info (ID: 0): `{:server_info, server_name, motd, _player_type}`
+   * Ping Player (ID: 1): `{:ping}`
    * Map Initialize (ID: 2): `{:map_initialize}`
    * Map Chunk (ID: 3): `{:spawn_player, player_id, player_name, x, y, z, yaw, pitch}`
    * Spawn Player (ID: 4): `{:map_finalize, length, width, height}`
@@ -24,6 +25,12 @@ defmodule BeamCraft.EncodingHelpers do
    * Despawn Player (ID: 12): `{:despawn_player, player_id}`
    * Message Player (ID: 13): `{:message_player, player_id, message}`
   """
+
+
+  # Ping player
+  def encode_packet({:ping}) do
+    <<1::size(8)>>
+  end
 
   # Server Info
   def encode_packet({:server_info, server_name, motd, _player_type}) do

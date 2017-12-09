@@ -24,6 +24,7 @@ defmodule BeamCraft.GameServer do
 
   defp tick_logic(state) do
     #TODO Tick game logic in here
+    send_packet_to_all(state, player_ping_msg())
     state
   end
 
@@ -154,6 +155,10 @@ defmodule BeamCraft.GameServer do
 
   defp send_packet_to_all(state, packet) do
      for c <- state.clients, do: send(c.pid, {:send_packet, packet})
+  end
+
+  defp player_ping_msg() do
+    {:ping}
   end
 
   defp player_to_spawn_msg(player) do
