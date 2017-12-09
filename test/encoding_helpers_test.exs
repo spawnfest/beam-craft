@@ -51,9 +51,9 @@ defmodule EncodingHelpersTest do
     assert expected == BeamCraft.EncodingHelpers.encode_packet(given)
   end
 
-  test "encoding a message packet" do
+  test "encoding a message player packet" do
     expected =  <<13, 255, String.pad_trailing("test", 64) :: binary>>
-    given = {:message, -1, "test"}
+    given = {:message_player, -1, "test"}
 
     assert expected == BeamCraft.EncodingHelpers.encode_packet(given)
   end
