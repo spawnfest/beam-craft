@@ -7,7 +7,7 @@ defmodule BeamCraft.World do
 
   def world_init() do
     world = %__MODULE__{
-      data: Binary.copy(<<0x09>>, @default_width * @default_length * @default_height)
+      data: Binary.copy(<<0x00>>, @default_width * @default_length * @default_height)
     }
 
     {:ok, world, _} = set_block(world, 0,0,0, 6)
