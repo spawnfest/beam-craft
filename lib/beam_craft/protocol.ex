@@ -62,7 +62,6 @@ defmodule BeamCraft.Protocol do
     y = ey/32
     z = ez/32
 
-    {player_id, x, y, z, yaw, pitch} = BeamCraft.GameServer.position_player(player_id,x,y,z,yaw,pitch)
     packet = {:player_position, player_id, x, y, z, yaw, pitch}
     {:ok, packet, rest}
   end
