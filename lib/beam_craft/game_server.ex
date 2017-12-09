@@ -9,7 +9,7 @@ defmodule BeamCraft.GameServer do
   end
 
   defmodule State do
-    defstruct clients: [], player_id_pool: (for i <- 1..254, do: i)
+    defstruct clients: [], player_id_pool: (for i <- 1..127, do: i)
   end
 
   def start_link(opts) do
@@ -25,7 +25,7 @@ defmodule BeamCraft.GameServer do
     player = %Player{pid: from_pid, player_id: player_id, username: username, x: 16.0, y: 1.6, z: 16.0, pitch: 0, yaw: 0, player_type: :regular}
 
     # Tell every connected client that a new player has joined
-    for c <- state.clients, do: send(c.pid, {:send_packet, player_to_spawn_msg(player)})
+    send_packet_to_all(state, player_to_spawn_msg(player))
 
     # Tell the newly connecting client about all of the players
     for c <- state.clients, do: send(from_pid, {:send_packet, player_to_spawn_msg(c)})
@@ -37,51 +37,47 @@ defmodule BeamCraft.GameServer do
   end
 
   def handle_call({:send_message, message}, {from_pid, _from_ref}, state) do
-    sender = Enum.find(state.clients, fn(c) -> c.pid == from_pid end)
+    {sender, _} = player_by_pid(state, from_pid)
     msg = {:message_player, sender.player_id, "#{sender.username}> #{message}"}
 
-    for c <- state.clients, do: send(c.pid, {:send_packet, msg})
+    send_packet_to_all(state, msg)
 
     {:reply, :ok, state}
   end
 
   def handle_call({:update_position, x, y, z, pitch, yaw}, {from_pid, _from_ref}, state) do
-    sender_idx = Enum.find_index(state.clients, fn(c) -> c.pid == from_pid end)
-    old_sender = Enum.at(state.clients, sender_idx)
+    {old_sender, sender_idx} = player_by_pid(state, from_pid)
     new_sender = %{ old_sender | x: x, y: y, z: z, pitch: pitch, yaw: yaw}
 
-    for c <- state.clients, do: send(c.pid, {:send_packet, player_to_update_position_msg(new_sender)})
-
+    send_packet_to_all(state, player_to_update_position_msg(new_sender))
     next_state = %{ state | clients: List.replace_at(state.clients, sender_idx, new_sender)}
 
     {:reply, :ok, next_state}
   end
 
   def handle_call({:create_block, x, y, z, block_type}, {_from_pid, _from_ref}, state) do
-    for c <- state.clients, do: send(c.pid, {:send_packet, {:set_block,  x, y, z, block_type}})
+    send_packet_to_all(state, {:set_block,  x, y, z, block_type})
 
     {:reply, :ok, state}
   end
 
   def handle_call({:destroy_block, x, y, z, _block_type}, {_from_pid, _from_ref}, state) do
-    for c <- state.clients, do: send(c.pid, {:send_packet, {:set_block,  x, y, z, 0}})
-
+    send_packet_to_all(state, {:set_block,  x, y, z, 0})
+    
     {:reply, :ok, state}
   end
 
   def handle_call({:logout}, {from_pid, _from_ref}, state) do
-    sender_idx = Enum.find_index(state.clients, fn(c) -> c.pid == from_pid end)
-    sender = Enum.at(state.clients, sender_idx)
+    {sender, sender_idx} = player_by_pid(state, from_pid)
 
     new_state = %{state | clients: List.delete_at(state.clients, sender_idx), player_id_pool: [sender.player_id] ++ state.player_id_pool }
-
-    for c <- new_state.clients, do: send(c.pid, {:send_packet, {:despawn_player, sender.player_id}})
-
+    send_packet_to_all(new_state, {:despawn_player, sender.player_id})
+    
     {:reply, :ok, new_state}
   end
 
   # fetching map details
-  def handle_call({:do_get_map_details}, from, state) do
+  def handle_call({:get_map_details}, {_from_ref, _from_pid}, state) do
     length = 32
     width = 32
     height = 32
@@ -92,7 +88,6 @@ defmodule BeamCraft.GameServer do
       {length, width, height, map_data},
       state}
   end
-
 
   ## client stuff
   def login(username, password) do
@@ -127,9 +122,29 @@ defmodule BeamCraft.GameServer do
 
   def get_map_details do
     server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call( server_pid, {:do_get_map_details})
+    GenServer.call( server_pid, {:get_map_details})
   end
 
+  # Internal helpers
+
+  defp player_by_pid(state, pid) do
+    sender_idx = Enum.find_index(state.clients, fn(c) -> c.pid == pid end)
+    sender = Enum.at(state.clients, sender_idx)
+
+    {sender, sender_idx}
+  end
+
+  defp player_by_username(state, username) do
+    sender_idx = Enum.find_index(state.clients, fn(c) -> c.username == username end)
+    sender = Enum.at(state.clients, sender_idx)
+
+    {sender, sender_idx}
+  end
+  
+  defp send_packet_to_all(state, packet) do
+     for c <- state.clients, do: send(c.pid, {:send_packet, packet})
+  end
+  
   defp player_to_spawn_msg(player) do
     {:spawn_player, player.player_id, player.username, player.x, player.y, player.z, player.yaw, player.pitch}
   end
