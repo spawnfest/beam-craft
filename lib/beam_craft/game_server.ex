@@ -1,7 +1,7 @@
 defmodule BeamCraft.World do
-  @default_width 3
-  @default_length 3
-  @default_height 3
+  @default_width 32
+  @default_length 32
+  @default_height 32
 
   defstruct width: @default_width, length: @default_length, height: @default_height, data: <<>>
 
@@ -12,13 +12,42 @@ defmodule BeamCraft.World do
 
     {:ok, world, _} = set_block(world, 0,0,0, 6)
     # fill stone (height = 0 to 19)
+    world = Enum.reduce(
+              generate_cube_coords(0,0,0,@default_width,@default_length,20),
+              world,
+              fn({x,y,z},world)->
+                {:ok, new_world, _} =set_block(world,x,y,z, 1)
+                new_world
+              end)
 
     # fill dirt (height = 20 to 24)
+    world = Enum.reduce(
+              generate_cube_coords(0,0,20,@default_width,@default_length,4),
+              world,
+              fn({x,y,z},world)->
+                {:ok, new_world, _} =set_block(world,x,y,z, 3)
+                new_world
+              end)
 
     # fill grass (height = 25)
+    world = Enum.reduce(
+              generate_cube_coords(0,0,24,@default_width,@default_length,1),
+              world,
+              fn({x,y,z},world)->
+                {:ok, new_world, _} =set_block(world,x,y,z, 2)
+                new_world
+              end)
 
     # add foiliage (height = 26)
     world
+  end
+
+  def generate_cube_coords(xoff,yoff,zoff,l,w,h) do
+    for ycoord <-yoff..yoff+w-1,
+        zcoord <-zoff..zoff+h-1,
+        xcoord <-xoff..xoff+l-1,
+         do:
+          {xcoord,ycoord,zcoord}
   end
 
   defp set_binary_at(binary, position, value) do
@@ -33,10 +62,8 @@ defmodule BeamCraft.World do
   def set_block( world, x, y, z, t) do
     if is_valid_block_position?( world, x, y, z ) do
       idx = get_index_for_block_position(world.width, world.length, world.height, x,y,z)
-      IO.puts "OLD #{inspect world.data, pretty: true}"
       old_type = Binary.at(world.data, idx)
       new_world = set_binary_at(world.data,idx, t)
-      IO.puts "NEW #{inspect new_world, pretty: true}"
       {:ok, %{world|data: new_world}, old_type }
     else
       {:error, :invalid_block_position}
@@ -63,7 +90,7 @@ defmodule BeamCraft.World do
   *This must be protected by `is_valid_block_position?` or simlar.*
   """
   defp get_index_for_block_position( w, l, h, x, y, z) do
-    x + y * (w) + z *(w*l)
+    x + y* (w) + z *(w*l)
   end
 
   def is_valid_block_position?( %__MODULE__{data: data, width: w, height: h, length: l},
@@ -71,13 +98,17 @@ defmodule BeamCraft.World do
     when is_integer(x) and is_integer(y) and is_integer(z)
     and x >= 0 and y >= 0 and z >= 0
   do
-    x < w and y < l and z < h
+    x < w and y < h and z < l
   end
   def is_valid_block_position?( _world, _x, _y, _z), do: false
 
 end
 
 defmodule BeamCraft.GameServer do
+  @default_width 32
+  @default_length 32
+  @default_height 32
+
   use GenServer
   alias BeamCraft.World
 
@@ -102,9 +133,14 @@ defmodule BeamCraft.GameServer do
     {:ok, %State{}}
   end
 
+  def pick_spawn_point() do
+    {1.0,@default_height-1.6,1.0}
+  end
+
   # handle login
   def handle_call({:login, username, _password}, {from_pid, _from_ref}, %{player_id_pool: [player_id|rest_pool]} = state) do
-    player = %Player{pid: from_pid, player_id: player_id, username: username, x: 16.0, y: 1.6, z: 16.0, pitch: 0, yaw: 0, player_type: :regular}
+    {spawnx,spawny,spawnz} = pick_spawn_point()
+    player = %Player{pid: from_pid, player_id: player_id, username: username, x: spawnx, y: spawny, z: spawnz, pitch: 0, yaw: 0, player_type: :regular}
 
     # Tell every connected client that a new player has joined
     send_packet_to_all(state, player_to_spawn_msg(player))
