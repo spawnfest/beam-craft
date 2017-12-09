@@ -29,19 +29,19 @@ defmodule BeamCraft.GameServer do
 
     # Tell the newly connecting client about all of the players
     for c <- state.clients, do: send(from_pid, {:send_packet, player_to_spawn_msg(c)})
-    
+
     reply  = {:ok, @server_name, @server_motd, player}
     next_state = %{ state | clients: [player|state.clients], player_id_pool: rest_pool}
-   
+
     {:reply, reply, next_state}
   end
 
   def handle_call({:send_message, message}, {from_pid, _from_ref}, state) do
     sender = Enum.find(state.clients, fn(c) -> c.pid == from_pid end)
     msg = {:message, sender.player_id, "#{sender.username}> #{message}"}
-    
+
     for c <- state.clients, do: send(c.pid, {:send_packet, msg})
-    
+
     {:reply, :ok, state}
   end
 
@@ -51,7 +51,7 @@ defmodule BeamCraft.GameServer do
     new_sender = %{ old_sender | x: x, y: y, z: z, pitch: pitch, yaw: yaw}
 
     for c <- state.clients, do: send(c.pid, {:send_packet, player_to_update_position_msg(new_sender)})
-    
+
     next_state = %{ state | clients: List.replace_at(state.clients, sender_idx, new_sender)}
 
     {:reply, :ok, next_state}
@@ -59,28 +59,40 @@ defmodule BeamCraft.GameServer do
 
   def handle_call({:create_block, x, y, z, block_type}, {_from_pid, _from_ref}, state) do
     for c <- state.clients, do: send(c.pid, {:send_packet, {:set_block,  x, y, z, block_type}})
-    
+
     {:reply, :ok, state}
   end
 
   def handle_call({:destroy_block, x, y, z, _block_type}, {_from_pid, _from_ref}, state) do
     for c <- state.clients, do: send(c.pid, {:send_packet, {:set_block,  x, y, z, 0}})
-    
+
     {:reply, :ok, state}
   end
 
   def handle_call({:logout}, {from_pid, _from_ref}, state) do
     sender_idx = Enum.find_index(state.clients, fn(c) -> c.pid == from_pid end)
     sender = Enum.at(state.clients, sender_idx)
-    
+
     new_state = %{state | clients: List.delete_at(state.clients, sender_idx), player_id_pool: [sender.player_id] ++ state.player_id_pool }
 
     for c <- new_state.clients, do: send(c.pid, {:send_packet, {:despawn_player, sender.player_id}})
-    
+
     {:reply, :ok, new_state}
   end
 
-  
+  def handle_call({:do_get_map_details}, from, state) do
+    length = 32
+    width = 32
+    height = 32
+    # This is a large block of water
+    map_data = for _ <- 1..(length * width * height), do: 9
+
+    {:reply,
+      {length, width, height, map_data},
+      state}
+  end
+
+
   ## client stuff
   def login(username, password) do
     server_pid = :erlang.whereis(__MODULE__)
@@ -112,16 +124,9 @@ defmodule BeamCraft.GameServer do
     GenServer.call(server_pid, {:logout})
   end
 
-  
-  # TODO: Back this against the state of the game world
   def get_map_details do
-    length = 32
-    width = 32
-    height = 32
-    # This is a large block of water
-    map_data = for _ <- 1..(length * width * height), do: 9
-    
-    {length, width, height, map_data}
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call( server_pid, {:do_get_map_details})
   end
 
   defp player_to_spawn_msg(player) do
