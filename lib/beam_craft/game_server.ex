@@ -38,7 +38,7 @@ defmodule BeamCraft.GameServer do
 
   def handle_call({:send_message, message}, {from_pid, _from_ref}, state) do
     sender = Enum.find(state.clients, fn(c) -> c.pid == from_pid end)
-    msg = {:message, sender.player_id, "#{sender.username}> #{message}"}
+    msg = {:message_player, sender.player_id, "#{sender.username}> #{message}"}
 
     for c <- state.clients, do: send(c.pid, {:send_packet, msg})
 

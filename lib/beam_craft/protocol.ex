@@ -57,7 +57,7 @@ defmodule BeamCraft.Protocol do
   end
 
   # Player Position
-  defp receive_packet(<<8, player_id :: signed-big-integer-size(8), ex :: unsigned-big-integer-size(16), ey :: unsigned-big-integer-size(16), ez :: unsigned-big-integer-size(16), yaw, pitch, rest :: binary>>) do
+  defp receive_packet(<<8, player_id :: signed-big-integer-size(8), ex :: signed-big-integer-size(16), ey :: signed-big-integer-size(16), ez :: signed-big-integer-size(16), yaw, pitch, rest :: binary>>) do
     x = ex/32
     y = ey/32
     z = ez/32
@@ -96,7 +96,13 @@ defmodule BeamCraft.Protocol do
     iy = round(y * 32)
     iz = round(z * 32)
 
-    <<7, player_id :: signed-big-integer-size(8), String.pad_trailing(player_name, 64) :: binary, ix :: unsigned-big-integer-size(16), iy :: unsigned-big-integer-size(16), iz :: unsigned-big-integer-size(16), yaw, pitch>>
+    <<7,
+    player_id :: signed-big-integer-size(8),
+    String.pad_trailing(player_name, 64) :: binary,
+    ix :: signed-big-integer-size(16),
+    iy :: signed-big-integer-size(16),
+    iz :: signed-big-integer-size(16),
+    yaw, pitch>>
   end
 
   # Map Initialize
@@ -109,25 +115,92 @@ defmodule BeamCraft.Protocol do
     <<4, length :: unsigned-big-integer-size(16), width :: unsigned-big-integer-size(16), height :: unsigned-big-integer-size(16)>>
   end
 
-  defp build_packet({:message, player_id, message}) do
-    <<13, player_id :: signed-big-integer-size(8), String.pad_trailing(message, 64) :: binary>>
+  # Ping
+  defp build_packet({:ping_player}) do
+    <<1>>
   end
 
+  # Set block
+  defp build_packet({:set_block, x, y, z, type}) do
+    <<6,
+      x::signed-big-integer-size(16),
+      y::signed-big-integer-size(16),
+      z::signed-big-integer-size(16),
+      type>>
+  end
+
+  # Teleport player
   defp build_packet({:position_player, player_id, x, y, z, yaw, pitch}) do
-    # Encode palayer position with 5 degrees of precision
     ix = round(x * 32)
     iy = round(y * 32)
     iz = round(z * 32)
 
-    <<8, player_id :: signed-big-integer-size(8), ix :: unsigned-big-integer-size(16), iy :: unsigned-big-integer-size(16), iz :: unsigned-big-integer-size(16), yaw, pitch>>
+    <<8,
+    player_id :: signed-big-integer-size(8),
+    x::signed-big-integer-size(16),
+    y::signed-big-integer-size(16),
+    z::signed-big-integer-size(16),
+    yaw::size(8),
+    pitch::size(8)>>
   end
 
-  defp build_packet({:set_block,  x, y, z, block_type}) do
-    <<6, x :: unsigned-big-integer-size(16), y :: unsigned-big-integer-size(16), z :: unsigned-big-integer-size(16), block_type>>
+  # Update player pose
+  defp build_packet({:update_player_pose, player_id, dx, dy, dz, yaw, pitch}) do
+    <<9,
+    player_id :: signed-big-integer-size(8),
+    dx::signed-big-integer-size(16),
+    dy::signed-big-integer-size(16),
+    dz::signed-big-integer-size(16),
+    yaw::size(8),
+    pitch::size(8)>>
   end
 
+  # Update player pose
+  defp build_packet({:update_player_position, player_id, dx, dy, dz}) do
+    <<0x0a,
+    player_id :: signed-big-integer-size(8),
+    dx::signed-big-integer-size(16),
+    dy::signed-big-integer-size(16),
+    dz::signed-big-integer-size(16)
+    >>
+  end
+
+  # Update player orientation
+  defp build_packet({:update_player_orientation, player_id, yaw, pitch}) do
+    <<0x0b,
+    player_id :: signed-big-integer-size(8),
+    yaw::size(8),
+    pitch::size(8)
+    >>
+  end
+
+  # Despawn player
   defp build_packet({:despawn_player, player_id}) do
-    <<12, player_id :: signed-big-integer-size(8)>>
+    <<0x0c,
+      player_id::signed-size(8)
+    >>
+  end
+
+  # Message
+  defp build_packet({:message_player, player_id, msg}) do
+    <<0x0d,
+      player_id::signed-size(8),
+      String.pad_trailing(msg, 64) :: binary
+    >>
+  end
+
+  # Disconnect player
+  defp build_packet({:disconnect_player, reason}) do
+    <<0x0e,
+      String.pad_trailing(reason, 64) :: binary
+    >>
+  end
+
+  # Update user type
+  defp build_packet({:update_user_type, type}) do
+    <<0x0f,
+      type::size(8)
+    >>
   end
 
   defp build_packet(any) do
