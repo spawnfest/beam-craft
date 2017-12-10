@@ -191,28 +191,28 @@ defmodule BeamCraft.GameServer do
 
     case classify_message(message) do
       {:msg_ping} ->
-        send_chat_to_player(state, sender, sender, "pong!")
+        send_chat_to_player(state, sender, sender, "&6pong!")
         {:reply, :ok, state}
       {:msg_whereami} ->
-        send_chat_to_player(state, sender, sender, "POS: #{sender.x} #{sender.y} #{sender.z} <#{sender.yaw}, #{sender.pitch}>")
+        send_chat_to_player(state, sender, sender, "&aPOS: #{sender.x} #{sender.y} #{sender.z} <#{sender.yaw}, #{sender.pitch}>")
         {:reply, :ok, state}
       {:msg_whisper, user_to, msg} ->
         case player_by_username(state, user_to) do
           {:ok,{recipient,_}} ->
-            send_chat_to_player(state, sender, recipient, "#{sender.username} whispers > #{msg}")
+            send_chat_to_player(state, sender, recipient, "&5#{sender.username} whispers > #{msg}")
             {:reply, :ok, state}
           _ ->
-            send_chat_to_player(state, sender, sender, "Can't find player #{user_to} to whisper to!")
+            send_chat_to_player(state, sender, sender, "&4Can't find player #{user_to} to whisper to!")
             {:reply, :ok, state}
         end
       {:malformed_whisper} ->
-        send_chat_to_player(state, sender, sender, "Usage: '/whisper <playername> <message>'")
+        send_chat_to_player(state, sender, sender, "&4Usage: '/whisper <playername> <message>'")
         {:reply, :ok, state}
       {:msg_teleport, x, y, z} ->
         new_state = teleport_player(state,sender, x,y,z)
         {:reply, :ok, new_state}
       {:malformed_teleport} ->
-        send_chat_to_player(state, sender, sender, "Usage: '/teleport <x> <y> <z>'")
+        send_chat_to_player(state, sender, sender, "&4Usage: '/teleport <x> <y> <z>'")
         {:reply, :ok, state}
       {:msg_normal, msg} ->
         send_chat_to_players(state, sender, "#{sender.username}> #{msg}")
