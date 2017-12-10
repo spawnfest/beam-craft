@@ -15,7 +15,7 @@ defmodule BeamCraft.MapServer do
   @still_water 9
 
   # Other blocks
-  #@sand 12
+  @sand 12
   @stone 1
   @bedrock 7
   @dirt 3
@@ -128,11 +128,17 @@ defmodule BeamCraft.MapServer do
     terrain_height = sample_terrain_height(x,z)
     cond do
       on_border?(x,y,z) -> @bedrock
-      in_water?(y,terrain_height) -> @still_water
+      in_water?(y,terrain_height) ->
+        if y < terrain_height do
+          @sand
+        else
+          @still_water
+        end
       underground?(y,terrain_height) ->
         cond do
           y + 3 < terrain_height -> @stone
           y + 1 < terrain_height -> @dirt
+          y - 3 < (@map_height/2) -> @sand
           y  < terrain_height -> @grass
         end
       true -> @air
