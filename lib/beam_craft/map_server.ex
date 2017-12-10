@@ -19,7 +19,7 @@ defmodule BeamCraft.MapServer do
   @stone 1
   @bedrock 7
   @dirt 3
-  @grass_block 2
+  @grass 2
 
   # map generation consants
   @bedrock_level 0
@@ -105,11 +105,26 @@ defmodule BeamCraft.MapServer do
      || y <= @bedrock_level
   end
 
+  defp sample_terrain_height(x,z) do
+    u = x / @map_width
+    v = z / @map_length
+
+    # Uncomment either of these and watch the server become angry.
+    #:math.exp(u*v)*0.25*(:math.sin(35*u) * :math.cos(17*v))
+    #0.25*(:math.sin(35*u) * :math.cos(17*v))
+
+    0.25
+  end
+
   defp sample_map(x,y,z) do
+    terrain_height = sample_terrain_height(x,z) * @map_height
     cond do
       on_border(x,y,z) -> @bedrock
+      y - 3 > terrain_height -> @air
+      y - 2 > terrain_height -> @grass
+      y > terrain_height -> @dirt
+      y < terrain_height -> @stone
       y <= @sea_floor -> @stone
-      y <= @sea_level -> @still_water
       true -> @air
     end
   end
