@@ -2,7 +2,7 @@ defmodule BeamCraft.MapServer do
   use GenServer
 
   defmodule State do
-    defstruct map_table: :map_table, length: 32, width: 32, height: 32
+    defstruct map_table: :map_table, length: 128, width: 128, height: 32
   end
   
   def start_link(opts) do

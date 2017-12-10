@@ -55,7 +55,7 @@ defmodule BeamCraft.EncodingHelpers do
 
   # Map Finalize
   def encode_packet({:map_finalize, length, width, height}) do
-    <<4, length :: unsigned-big-integer-size(16), width :: unsigned-big-integer-size(16), height :: unsigned-big-integer-size(16)>>
+    <<4, length :: unsigned-big-integer-size(16), height :: unsigned-big-integer-size(16), width :: unsigned-big-integer-size(16)>>
   end
 
   # Set Block
