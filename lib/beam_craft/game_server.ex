@@ -76,13 +76,29 @@ defmodule BeamCraft.GameServer do
     {:reply, reply, next_state}
   end
 
+  defp classify_message(msg) do
+    parsed = String.split( msg, ~r{\s+}, trim: true)
+    case parsed do
+      ["/ping"] -> {:msg_ping}
+      _ -> {:msg_normal, msg}
+    end
+  end
+
   def handle_call({:send_message, message}, {from_pid, _from_ref}, state) do
     {sender, _} = player_by_pid(state, from_pid)
-    msg = {:message_player, sender.player_id, "#{sender.username}> #{message}"}
 
-    send_packet_to_all(state, msg)
+    case classify_message(message) do
+      {:msg_ping} ->
+        send_chat_to_player(state, sender, sender, "pong!")
+        {:reply, :ok, state}
+      {:msg_normal, msg} ->
+        send_chat_to_players(state, sender, msg)
+        {:reply, :ok, state}
+      _ ->
+        IO.puts("Unhandled player message #{inspect message}")
+        {:reply, {:error,:unknown_player_message}, state}
+    end
 
-    {:reply, :ok, state}
   end
 
   def handle_call({:update_position, x, y, z, pitch, yaw}, {from_pid, _from_ref}, state) do
@@ -180,6 +196,16 @@ defmodule BeamCraft.GameServer do
     sender = Enum.at(state.clients, sender_idx)
 
     {sender, sender_idx}
+  end
+
+  defp send_chat_to_player(state, from, to, message) do
+    msg = {:message_player, from.player_id, "#{from.username} (to you)> #{message}"}
+    send(to.pid, {:send_packet, msg})
+  end
+
+  defp send_chat_to_players( state, from, message ) do
+    msg = {:message_player, from.player_id, "#{from.username}> #{message}"}
+    send_packet_to_all(state, msg)
   end
 
   defp send_packet_to_all(state, packet) do
