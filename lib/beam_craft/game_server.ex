@@ -345,38 +345,8 @@ defmodule BeamCraft.GameServer do
   defp player_to_update_position_msg(player) do
     {:position_player, player.player_id, player.x, player.y, player.z, player.yaw, player.pitch}
   end
+
   defp player_to_update_position_msg_for_player(player) do
     {:position_player, -1, player.x, player.y, player.z, player.yaw, player.pitch}
-  end
-
-  defp teleport_player( state, player, x, y, z) do
-    {old_player, player_idx} = player_by_pid(state, player.pid)
-    new_player = %{ old_player | x: x, y: y, z: z }
-    send_packet_to_player(state, player, player_to_update_position_msg_for_player(new_player))
-    send_packet_to_all(state, player_to_update_position_msg(new_player))
-    %{ state | clients: List.replace_at(state.clients, player_idx, new_player)}
-  end
-
-  defp classify_message(msg) do
-    parsed = String.split( msg, ~r{\s+}, trim: true)
-    case parsed do
-      ["/ping"] -> {:msg_ping}
-      ["/whereami"]-> {:msg_whereami}
-      ["/teleport",rawx,rawy,rawz | _rest] ->
-        case [Float.parse(rawx),Float.parse(rawy), Float.parse(rawz)] do
-          [{x,_},{y,_},{z,_}] ->
-            {:msg_teleport, x, y, z}
-          _ ->
-            {:malformed_teleport}
-        end
-      ["/teleport"| _rest]->
-        {:malformed_teleport}
-      ["/whisper", user_to | _rest] ->
-        clean_msg = msg |> String.trim_leading("/whisper #{user_to}")
-        {:msg_whisper, user_to, clean_msg}
-      ["/whisper" | _rest] ->
-        {:malformed_whisper}
-      _ -> {:msg_normal, msg}
-    end
   end
 end
