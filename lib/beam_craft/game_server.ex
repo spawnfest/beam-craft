@@ -25,17 +25,15 @@ defmodule BeamCraft.GameServer do
     {:ok, %State{}}
   end
 
-  defp tick_logic(state) do
-    #TODO Tick game logic in here
-    send_packet_to_all(state, player_ping_msg())
-    state
-  end
-
   # tick game logic
   def handle_info(:tick, state) do
-    new_state = tick_logic(state)
+    send_packet_to_all(state, player_ping_msg())
+
+    {:ok, changes} = BeamCraft.MapServer.eval_block_transforms()
+    for c <- changes, do: send_packet_to_all(state, c)
+    
     :erlang.send_after(@tick_rate, self(), :tick)
-    {:noreply, new_state}
+    {:noreply, state}
   end
 
   # handle login
