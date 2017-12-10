@@ -15,7 +15,7 @@ defmodule BeamCraft.MapServer do
   @still_water 9
 
   # Other blocks
-  @sand 12
+  #@sand 12
   @stone 1
   @bedrock 7
   @dirt 3
@@ -23,8 +23,8 @@ defmodule BeamCraft.MapServer do
 
   # map generation consants
   @bedrock_level 0
-  @sea_level 20
-  @sea_floor 10
+  #@sea_level 20
+  #@sea_floor 10
 
   @map_length 512
   @map_width 512
@@ -53,7 +53,7 @@ defmodule BeamCraft.MapServer do
   end
 
   def handle_call({:get_default_spawn}, _from, state) do
-    {:reply, {state.width/2, state.height/2 + 1.6, state.length/2}, state}
+    {:reply, {state.width/2, state.height-1.6, state.length/2}, state}
   end
 
   def handle_call({:set_block, x, y, z, block_type}, _from, state) do

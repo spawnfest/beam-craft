@@ -76,28 +76,6 @@ defmodule BeamCraft.GameServer do
     {:reply, reply, next_state}
   end
 
-  defp classify_message(msg) do
-    parsed = String.split( msg, ~r{\s+}, trim: true)
-    case parsed do
-      ["/ping"] -> {:msg_ping}
-      ["/whereami"]-> {:msg_whereami}
-      ["/teleport",rawx,rawy,rawz | rest] ->
-        case [Float.parse(rawx),Float.parse(rawy), Float.parse(rawz)] do
-          [{x,_},{y,_},{z,_}] ->
-            {:msg_teleport, x, y, z}
-          _ ->
-            {:malformed_teleport}
-        end
-      ["/teleport"|rest]->
-        {:malformed_teleport}
-      ["/whisper", user_to |rest] ->
-        clean_msg = msg |> String.trim_leading("/whisper #{user_to}")
-        {:msg_whisper, user_to, clean_msg}
-      ["/whisper" | rest] ->
-        {:malformed_whisper}
-      _ -> {:msg_normal, msg}
-    end
-  end
 
   def handle_call({:send_message, message}, {from_pid, _from_ref}, state) do
     {sender, _} = player_by_pid(state, from_pid)
@@ -134,14 +112,6 @@ defmodule BeamCraft.GameServer do
         IO.puts("Unhandled player message #{inspect message}")
         {:reply, {:error,:unknown_player_message}, state}
     end
-  end
-
-  defp teleport_player( state, player, x, y, z) do
-    {old_player, player_idx} = player_by_pid(state, player.pid)
-    new_player = %{ old_player | x: x, y: y, z: z }
-    send_packet_to_player(state, player, player_to_update_position_msg_for_player(new_player))
-    send_packet_to_all(state, player_to_update_position_msg(new_player))
-    %{ state | clients: List.replace_at(state.clients, player_idx, new_player)}
   end
 
   def handle_call({:update_position, x, y, z, pitch, yaw}, {from_pid, _from_ref}, state) do
@@ -235,7 +205,6 @@ defmodule BeamCraft.GameServer do
   end
 
   defp player_by_username(state, username) do
-    sender_idx = Enum.find_index(state.clients, fn(c) -> c.username == username end)
     case Enum.find_index(state.clients, fn(c) -> c.username == username end) do
       nil ->
         {:error, :player_not_found}
@@ -244,7 +213,7 @@ defmodule BeamCraft.GameServer do
     end
   end
 
-  defp send_chat_to_player(state, from, to, message) do
+  defp send_chat_to_player(_state, from, to, message) do
     msg = {:message_player, from.player_id, message}
     send(to.pid, {:send_packet, msg})
   end
@@ -275,5 +244,36 @@ defmodule BeamCraft.GameServer do
   end
   defp player_to_update_position_msg_for_player(player) do
     {:position_player, -1, player.x, player.y, player.z, player.yaw, player.pitch}
+  end
+
+  defp teleport_player( state, player, x, y, z) do
+    {old_player, player_idx} = player_by_pid(state, player.pid)
+    new_player = %{ old_player | x: x, y: y, z: z }
+    send_packet_to_player(state, player, player_to_update_position_msg_for_player(new_player))
+    send_packet_to_all(state, player_to_update_position_msg(new_player))
+    %{ state | clients: List.replace_at(state.clients, player_idx, new_player)}
+  end
+
+  defp classify_message(msg) do
+    parsed = String.split( msg, ~r{\s+}, trim: true)
+    case parsed do
+      ["/ping"] -> {:msg_ping}
+      ["/whereami"]-> {:msg_whereami}
+      ["/teleport",rawx,rawy,rawz | _rest] ->
+        case [Float.parse(rawx),Float.parse(rawy), Float.parse(rawz)] do
+          [{x,_},{y,_},{z,_}] ->
+            {:msg_teleport, x, y, z}
+          _ ->
+            {:malformed_teleport}
+        end
+      ["/teleport"| _rest]->
+        {:malformed_teleport}
+      ["/whisper", user_to | _rest] ->
+        clean_msg = msg |> String.trim_leading("/whisper #{user_to}")
+        {:msg_whisper, user_to, clean_msg}
+      ["/whisper" | _rest] ->
+        {:malformed_whisper}
+      _ -> {:msg_normal, msg}
+    end
   end
 end
