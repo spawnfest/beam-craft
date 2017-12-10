@@ -1,8 +1,6 @@
 defmodule BeamCraft.GameServer do
   use GenServer
 
-  @server_name "Beam Craft Server"
-  @server_motd "This is a test server!"
   @tick_rate 100
 
   defmodule Player do
@@ -47,7 +45,9 @@ defmodule BeamCraft.GameServer do
     # Tell the newly connecting client about all of the players
     for c <- state.clients, do: send(from_pid, {:send_packet, player_to_spawn_msg(c)})
 
-    reply  = {:ok, @server_name, @server_motd, player}
+    server_name = Application.get_env(:beam_craft, :server_name)
+    motd = Application.get_env(:beam_craft, :motd)
+    reply  = {:ok, server_name, motd, player}
     next_state = %{ state | clients: [player|state.clients], player_id_pool: rest_pool}
 
     {:reply, reply, next_state}

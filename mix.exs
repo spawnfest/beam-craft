@@ -14,6 +14,7 @@ defmodule BeamCraft.Mixfile do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
+      env: [port: 5555, server_name: "BeamCraft Server", motd: "Elixir Minecraft Server!"],
       extra_applications: [:logger],
       mod: {BeamCraft.Application, []}
     ]
