@@ -76,13 +76,72 @@ defmodule BeamCraft.GameServer do
     {:reply, reply, next_state}
   end
 
+  defp classify_message(msg) do
+    parsed = String.split( msg, ~r{\s+}, trim: true)
+    case parsed do
+      ["/ping"] -> {:msg_ping}
+      ["/whereami"]-> {:msg_whereami}
+      ["/teleport",rawx,rawy,rawz | rest] ->
+        case [Float.parse(rawx),Float.parse(rawy), Float.parse(rawz)] do
+          [{x,_},{y,_},{z,_}] ->
+            {:msg_teleport, x, y, z}
+          _ ->
+            {:malformed_teleport}
+        end
+      ["/teleport"|rest]->
+        {:malformed_teleport}
+      ["/whisper", user_to |rest] ->
+        clean_msg = msg |> String.trim_leading("/whisper #{user_to}")
+        {:msg_whisper, user_to, clean_msg}
+      ["/whisper" | rest] ->
+        {:malformed_whisper}
+      _ -> {:msg_normal, msg}
+    end
+  end
+
   def handle_call({:send_message, message}, {from_pid, _from_ref}, state) do
     {sender, _} = player_by_pid(state, from_pid)
-    msg = {:message_player, sender.player_id, "#{sender.username}> #{message}"}
 
-    send_packet_to_all(state, msg)
+    case classify_message(message) do
+      {:msg_ping} ->
+        send_chat_to_player(state, sender, sender, "pong!")
+        {:reply, :ok, state}
+      {:msg_whereami} ->
+        send_chat_to_player(state, sender, sender, "POS: #{sender.x} #{sender.y} #{sender.z} <#{sender.yaw}, #{sender.pitch}>")
+        {:reply, :ok, state}
+      {:msg_whisper, user_to, msg} ->
+        case player_by_username(state, user_to) do
+          {:ok,{recipient,_}} ->
+            send_chat_to_player(state, sender, recipient, "#{sender.username} whispers > #{msg}")
+            {:reply, :ok, state}
+          _ ->
+            send_chat_to_player(state, sender, sender, "Can't find player #{user_to} to whisper to!")
+            {:reply, :ok, state}
+        end
+      {:malformed_whisper} ->
+        send_chat_to_player(state, sender, sender, "Usage: '/whisper <playername> <message>'")
+        {:reply, :ok, state}
+      {:msg_teleport, x, y, z} ->
+        new_state = teleport_player(state,sender, x,y,z)
+        {:reply, :ok, new_state}
+      {:malformed_teleport} ->
+        send_chat_to_player(state, sender, sender, "Usage: '/teleport <x> <y> <z>'")
+        {:reply, :ok, state}
+      {:msg_normal, msg} ->
+        send_chat_to_players(state, sender, "#{sender.username}> #{msg}")
+        {:reply, :ok, state}
+      _ ->
+        IO.puts("Unhandled player message #{inspect message}")
+        {:reply, {:error,:unknown_player_message}, state}
+    end
+  end
 
-    {:reply, :ok, state}
+  defp teleport_player( state, player, x, y, z) do
+    {old_player, player_idx} = player_by_pid(state, player.pid)
+    new_player = %{ old_player | x: x, y: y, z: z }
+    send_packet_to_player(state, player, player_to_update_position_msg_for_player(new_player))
+    send_packet_to_all(state, player_to_update_position_msg(new_player))
+    %{ state | clients: List.replace_at(state.clients, player_idx, new_player)}
   end
 
   def handle_call({:update_position, x, y, z, pitch, yaw}, {from_pid, _from_ref}, state) do
@@ -177,13 +236,30 @@ defmodule BeamCraft.GameServer do
 
   defp player_by_username(state, username) do
     sender_idx = Enum.find_index(state.clients, fn(c) -> c.username == username end)
-    sender = Enum.at(state.clients, sender_idx)
+    case Enum.find_index(state.clients, fn(c) -> c.username == username end) do
+      nil ->
+        {:error, :player_not_found}
+      sender_idx->
+        {:ok, {Enum.at(state.clients, sender_idx), sender_idx}}
+    end
+  end
 
-    {sender, sender_idx}
+  defp send_chat_to_player(state, from, to, message) do
+    msg = {:message_player, from.player_id, message}
+    send(to.pid, {:send_packet, msg})
+  end
+
+  defp send_chat_to_players( state, from, message ) do
+    msg = {:message_player, from.player_id, message}
+    send_packet_to_all(state, msg)
   end
 
   defp send_packet_to_all(state, packet) do
      for c <- state.clients, do: send(c.pid, {:send_packet, packet})
+  end
+
+  defp send_packet_to_player(_state, player, packet) do
+    send(player.pid, {:send_packet,packet})
   end
 
   defp player_ping_msg() do
@@ -196,5 +272,8 @@ defmodule BeamCraft.GameServer do
 
   defp player_to_update_position_msg(player) do
     {:position_player, player.player_id, player.x, player.y, player.z, player.yaw, player.pitch}
+  end
+  defp player_to_update_position_msg_for_player(player) do
+    {:position_player, -1, player.x, player.y, player.z, player.yaw, player.pitch}
   end
 end
