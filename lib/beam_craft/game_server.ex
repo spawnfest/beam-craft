@@ -22,8 +22,25 @@ defmodule BeamCraft.GameServer do
     {:ok, %State{}}
   end
 
+
+  defp tick_water() do
+    # get all of the water blocks from ets
+    #flowing_blocks = BeamCraft.MapServer.get_blocks_by_type(0x8)
+
+    # if the water is surronded by water, it becomes stationary
+  end
+
+  defp tick_tnt(state) do
+    blastzone = BeamCraft.MapServer.get_blocks_adjacent_to_type(46)
+    for {x,y,z} <- blastzone do
+      :ok = BeamCraft.MapServer.set_block(x, y, z, 11)
+      send_packet_to_all(state, {:set_block,  x, y, z, 11})
+    end
+  end
+
   defp tick_logic(state) do
     #TODO Tick game logic in here
+    tick_tnt(state)
     send_packet_to_all(state, player_ping_msg())
     state
   end
