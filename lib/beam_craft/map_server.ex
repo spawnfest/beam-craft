@@ -21,9 +21,17 @@ defmodule BeamCraft.MapServer do
   @dirt 3
   @grass_block 2
 
+  # map generation consants
+  @bedrock_level 0
+  @sea_level 20
+  @sea_floor 10
+
+  @map_length 512
+  @map_width 512
+  @map_height 64
+
   defmodule State do
-    #defstruct map_table: :map_table, length: 512, width: 512, height: 64
-    defstruct map_table: :map_table, length: 4, width: 4, height: 4
+    defstruct map_table: :map_table, length: 512, width: 512, height: 64
   end
 
   def start_link(opts) do
@@ -91,35 +99,29 @@ defmodule BeamCraft.MapServer do
     GenServer.call(server_pid, {:eval_block_transforms})
   end
 
+  defp on_border(x,y,z) do
+     z == 0 || z == @map_length-1
+     || x == 0 || x == @map_width-1
+     || y <= @bedrock_level
+  end
+
   defp sample_map(x,y,z) do
     cond do
-      y = 0 -> @bedrock
-      y > 3 -> @water
+      on_border(x,y,z) -> @bedrock
+      y <= @sea_floor -> @stone
+      y <= @sea_level -> @still_water
       true -> @air
     end
   end
 
   defp generate_map(state) do
-    # Fill the map with air
-    #air_row = Rle.encode(for _ <- 0..(state.width - 1), do: 0)
-    #for y <- 0..(state.height - 1), z <- 0..(state.length - 1), do: :ets.insert(state.map_table, {{y,z}, air_row})
-    for y <- 0..(state.height - 1), z <- 0..(state.length - 1) do
+    (for y <- 0..(state.height - 1), z <- 0..(state.length - 1), do: [y,z])
+    |> Enum.map( fn([y,z])->
       row = for x <- 0..(state.width-1) do
         sample_map(x,y,z)
       end
       :ets.insert(state.map_table, {{y,z}, Rle.encode(row)})
-    end
-
-    # Generate a flat map
-    #bedrock_edge = round(state.height / 2) - 3
-
-    #stone_row = Rle.encode(for _ <- 0..(state.width - 1), do: @stone)
-    #sand_row = Rle.encode(for _ <- 0..(state.width - 1), do: @sand)
-    #water_row = Rle.encode(for _ <- 0..(state.width - 1), do: @still_water)
-
-    #for y <- 0..bedrock_edge, z <- 0..(state.length - 1), do: :ets.insert(state.map_table, {{y,z}, stone_row})
-    #for y <- bedrock_edge..bedrock_edge + 1, z <- 0..(state.length - 1), do: :ets.insert(state.map_table, {{y,z}, sand_row})
-    #for y <- bedrock_edge + 1..bedrock_edge + 2, z <- 0..(state.length - 1), do: :ets.insert(state.map_table, {{y,z}, water_row})
+    end)
   end
 
   defp set_block(state, x, y, z, block_type) do
