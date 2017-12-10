@@ -5,6 +5,8 @@ by Lobsters
 
 This is a simple Minecraft Classic server written in Elixir. It is compatable with the [ClassicSharp client](https://github.com/UnknownShadow200/ClassicalSharp).
 
+The current test server is live at `minecraft.burnwillows.net`.
+
 ## Running The Server
 
 ```sh
