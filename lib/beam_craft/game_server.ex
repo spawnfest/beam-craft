@@ -3,7 +3,7 @@ defmodule BeamCraft.GameServer do
 
   @server_name "Beam Craft Server"
   @server_motd "This is a test server!"
-  @tick_rate 100
+  @tick_rate 500
 
   defmodule Player do
     defstruct [:pid, :player_id, :username, :x, :y, :z, :pitch, :yaw, :player_type]
@@ -22,25 +22,49 @@ defmodule BeamCraft.GameServer do
     {:ok, %State{}}
   end
 
-
-  defp tick_water() do
+  defp tick_water(state) do
     # get all of the water blocks from ets
-    #flowing_blocks = BeamCraft.MapServer.get_blocks_by_type(0x8)
+    flowing_blocks = BeamCraft.MapServer.get_blocks_by_type(8)
+    air_blocks = BeamCraft.MapServer.get_blocks_by_type(0)
 
-    # if the water is surronded by water, it becomes stationary
+    if length(flowing_blocks) > 0 do
+      maybe_flood = for water <- flowing_blocks, air <- air_blocks do
+        {air, water}
+      end
+
+      to_flood = Enum.filter( maybe_flood, fn({air,water})->
+        BeamCraft.MapServer.is_block?(:adjacent,air,water)
+        and !BeamCraft.MapServer.is_block?(:above,air,water)
+      end)
+
+      for {{x,y,z},_} <- to_flood do
+        :ok = BeamCraft.MapServer.set_block(x, y, z, 8)
+        send_packet_to_all(state, {:set_block,  x, y, z, 8})
+      end
+    end
+
+    # flowing water becomes stationary
+    for {x,y,z} <- flowing_blocks do
+      :ok = BeamCraft.MapServer.set_block(x, y, z, 9)
+      send_packet_to_all(state, {:set_block,  x, y, z, 9})
+    end
   end
 
   defp tick_tnt(state) do
-    blastzone = BeamCraft.MapServer.get_blocks_adjacent_to_type(46)
-    for {x,y,z} <- blastzone do
-      :ok = BeamCraft.MapServer.set_block(x, y, z, 11)
-      send_packet_to_all(state, {:set_block,  x, y, z, 11})
+    tnt_blocks = BeamCraft.MapServer.get_blocks_by_type(46)
+    for {x,y,z} <- tnt_blocks do
+      :ok = BeamCraft.MapServer.set_block(x, y, z, 8)
+      send_packet_to_all(state, {:set_block,  x, y, z, 8})
     end
   end
 
   defp tick_logic(state) do
     #TODO Tick game logic in here
+    start_time = DateTime.utc_now()
     tick_tnt(state)
+    tick_water(state)
+    end_time = DateTime.utc_now()
+    #IO.puts("Frame in #{Time.diff(end_time,start_time, :milliseconds)}")
     send_packet_to_all(state, player_ping_msg())
     state
   end
