@@ -80,6 +80,9 @@ defmodule BeamCraft.GameServer do
     parsed = String.split( msg, ~r{\s+}, trim: true)
     case parsed do
       ["/ping"] -> {:msg_ping}
+      ["/whisper", user_to |rest] ->
+        clean_msg = msg |> String.trim_leading("/whisper #{user_to}")
+        {:msg_whisper, user_to, clean_msg}
       _ -> {:msg_normal, msg}
     end
   end
@@ -91,8 +94,17 @@ defmodule BeamCraft.GameServer do
       {:msg_ping} ->
         send_chat_to_player(state, sender, sender, "pong!")
         {:reply, :ok, state}
+      {:msg_whisper, user_to, msg} ->
+        case player_by_username(state, user_to) do
+          {:ok,{recipient,_}} ->
+            send_chat_to_player(state, sender, recipient, "#{sender.username} whispers > #{msg}")
+            {:reply, :ok, state}
+          _ ->
+            send_chat_to_player(state, sender, sender, "Can't find player #{user_to} to whisper to!")
+            {:reply, :ok, state}
+        end
       {:msg_normal, msg} ->
-        send_chat_to_players(state, sender, msg)
+        send_chat_to_players(state, sender, "#{sender.username}> #{msg}")
         {:reply, :ok, state}
       _ ->
         IO.puts("Unhandled player message #{inspect message}")
@@ -193,18 +205,21 @@ defmodule BeamCraft.GameServer do
 
   defp player_by_username(state, username) do
     sender_idx = Enum.find_index(state.clients, fn(c) -> c.username == username end)
-    sender = Enum.at(state.clients, sender_idx)
-
-    {sender, sender_idx}
+    case Enum.find_index(state.clients, fn(c) -> c.username == username end) do
+      nil ->
+        {:error, :player_not_found}
+      sender_idx->
+        {:ok, {Enum.at(state.clients, sender_idx), sender_idx}}
+    end
   end
 
   defp send_chat_to_player(state, from, to, message) do
-    msg = {:message_player, from.player_id, "#{from.username} (to you)> #{message}"}
+    msg = {:message_player, from.player_id, message}
     send(to.pid, {:send_packet, msg})
   end
 
   defp send_chat_to_players( state, from, message ) do
-    msg = {:message_player, from.player_id, "#{from.username}> #{message}"}
+    msg = {:message_player, from.player_id, message}
     send_packet_to_all(state, msg)
   end
 
