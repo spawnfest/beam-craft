@@ -31,7 +31,7 @@ defmodule BeamCraft.GameServer do
 
     {:ok, changes} = BeamCraft.MapServer.eval_block_transforms()
     for c <- changes, do: send_packet_to_all(state, c)
-    
+
     :erlang.send_after(@tick_rate, self(), :tick)
     {:noreply, state}
   end

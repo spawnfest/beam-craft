@@ -99,32 +99,42 @@ defmodule BeamCraft.MapServer do
     GenServer.call(server_pid, {:eval_block_transforms})
   end
 
-  defp on_border(x,y,z) do
+  defp on_border?(x,y,z) do
+    y + 2 < (@map_height/2) && (
      z == 0 || z == @map_length-1
      || x == 0 || x == @map_width-1
      || y <= @bedrock_level
+    )
+  end
+
+  defp in_water?(y,terrain_height) do
+    y > terrain_height &&
+    y - 2 < (@map_height/2)
+  end
+
+  defp underground?(y, terrain_height) do
+    y < terrain_height
   end
 
   defp sample_terrain_height(x,z) do
     u = x / @map_width
     v = z / @map_length
 
-    # Uncomment either of these and watch the server become angry.
-    #:math.exp(u*v)*0.25*(:math.sin(35*u) * :math.cos(17*v))
-    #0.25*(:math.sin(35*u) * :math.cos(17*v))
-
-    0.25
+    w = 0.3*(:math.sin(35*u) * :math.cos(17*v))
+    (w+0.5) * @map_height
   end
 
   defp sample_map(x,y,z) do
-    terrain_height = sample_terrain_height(x,z) * @map_height
+    terrain_height = sample_terrain_height(x,z)
     cond do
-      on_border(x,y,z) -> @bedrock
-      y - 3 > terrain_height -> @air
-      y - 2 > terrain_height -> @grass
-      y > terrain_height -> @dirt
-      y < terrain_height -> @stone
-      y <= @sea_floor -> @stone
+      on_border?(x,y,z) -> @bedrock
+      in_water?(y,terrain_height) -> @still_water
+      underground?(y,terrain_height) ->
+        cond do
+          y + 3 < terrain_height -> @stone
+          y + 1 < terrain_height -> @dirt
+          y  < terrain_height -> @grass
+        end
       true -> @air
     end
   end
