@@ -79,9 +79,6 @@ defmodule BeamCraft.MapServer do
 
   # map generation consants
   @bedrock_level 0
-  #@sea_level 20
-  #@sea_floor 10
-
   @map_length 512
   @map_width 512
   @map_height 64
@@ -164,6 +161,10 @@ defmodule BeamCraft.MapServer do
     y < terrain_height
   end
 
+  # Function to approximate a 2D heightmap.
+  # This interally scales to U and V on the domain [0,1]x[0,1]
+  # so we can use nice periodic trig functions.
+  # It needs to output a value on the range [0,@map_height].
   defp sample_terrain_height(x,z) do
     u = x / @map_width
     v = z / @map_length
@@ -172,6 +173,20 @@ defmodule BeamCraft.MapServer do
     (w+0.5) * @map_height
   end
 
+  # Function that gives a block type for a given X/Y/Z.
+  # This is a little gnarly because we have some rules about
+  # what makes a map look good.
+  #
+  # 1. Cells on the borders of a map must be bedrock
+  # 2. Cells under the trerrain need to be stone or simlar.
+  # 3. Cells above the terrain but under sealevel need to be water
+  # 4. Cells on the terrain but under water need to be sand.
+  # 5. Everything else should be air.
+  #
+  # The terrain itself is a height from a sampled function.
+  # We treat the terrain function as a 2D heightmap, giving the height
+  # of the terrain at that point. It currently is a pure math function,
+  # but it could also be a real heightmap or fBd or plasma or whatever.
   defp sample_map(x,y,z) do
     terrain_height = sample_terrain_height(x,z)
     cond do
@@ -193,6 +208,11 @@ defmodule BeamCraft.MapServer do
     end
   end
 
+  # Give a state, generate the map for it.
+  # Because ETS is soooo slow for this, we sample a map function that
+  # will give us a type for an X/Y/Z position, without needing to consult
+  # any other state. This is similar to GPU shading tricks where pixels
+  # can't really read each other on a given frame.
   defp generate_map(state) do
     (for y <- 0..(state.height - 1), z <- 0..(state.length - 1), do: [y,z])
     |> Enum.map( fn([y,z])->
