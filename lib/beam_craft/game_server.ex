@@ -1,20 +1,130 @@
 defmodule BeamCraft.GameServer do
   use GenServer
 
+  @moduledoc """
+  GameServer manages the state of players and updating players of changes to the world.
+
+  It provides an api, which is consumed by `BeamCraft.Protocol`, to update a 
+  player's state based off of incomming messages, then broadcast out the approprate 
+  response to the other connected players.
+  """
+
   @tick_rate 100
 
   defmodule Player do
+    @moduledoc false
     defstruct [:pid, :player_id, :username, :x, :y, :z, :pitch, :yaw, :player_type]
   end
 
+
   defmodule PlayerAccount do
+    @moduledoc false
     defstruct [:username, :x, :y, :z, :yaw, :pitch, :player_type]
   end
 
   defmodule State do
+    @moduledoc false
     defstruct clients: [], player_id_pool: (for i <- 1..127, do: i), player_table: :player_table
   end
 
+  
+  @doc """
+  Logs a player into the server.
+
+  This function adds a `BeamCraft.Protocol` pid to the list of,
+  connected clients and broadcasts a spawn player message to 
+  all clients. The client is given a player id from an internal pool,
+  which is used to reference the client in subsequent communications.
+
+  If the same username has connected before, the player will
+  be spawned in that position. If not, the player will be
+  spawned at the default spawn location,
+  given by `BeamCraft.MapServer`.
+  """
+  def login(username, password) do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:login, username, password})
+  end
+
+  @doc """
+  Sends a chat message, or processes a command if that chat message begins with a `/`.
+
+  The process calling this must be present in the clients list.
+
+  If the chat message is a regular message, it is broadcast to all connecing clients.
+  If it begins with a '/'is can be one of the following chat commands:
+    * `/ping` - Replys with pong.
+    * `/whereami` - Prints out your current position.
+    * `/teleport <x> <y> <z>` - Teleports you to the given point on the map.
+    * `/whisper <target> <message>` - Sends a private message to the target player.
+  """
+  def send_message(message) do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:send_message, message})
+  end
+
+  @doc """
+  Updates the position of the player.
+
+  The process calling this must be present in the clients list. The change in 
+  position is broadcast to all clients.
+  """
+  def update_position(x, y, z, yaw, pitch) do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:update_position, x, y, z, pitch, yaw})
+  end
+
+  @doc """
+  Calls `BeamCraft.MapServer.set_block/4` to create a block.
+
+  The process calling this must be present in the clients list. The change 
+  is broadcast to all clients.
+  """
+  def create_block(x, y, z, block_type) do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:create_block, x, y, z, block_type})
+  end
+
+  @doc """
+  Calls `BeamCraft.MapServer.set_block/4` to create a block.
+
+  The process calling this must be present in the clients list. The change 
+  is broadcast to all clients.
+  """
+  def destroy_block(x, y, z, block_type) do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:destroy_block, x, y, z, block_type})
+  end
+
+  @doc """
+  Logs a player out of the game.
+
+  The process calling this must be present in the clients list.
+  
+  Removes a player from the connected clients list, returns the 
+  assigned player id to the pool and saves the player's last known
+  position.
+  """
+  def logout() do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:logout})
+  end
+
+  @doc """
+  Gets the map coordinates and binary representation for `BeamCraft.Protocol`.
+
+  Calls `BeamCraft.MapServer.get_map/0` to retrieve the data nesscary to 
+  build the map chunk and map finalize packets, which must be sent to the 
+  client before they can move about the game world.
+  """
+  def get_map_details do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call( server_pid, {:get_map_details})
+  end
+
+  @doc """
+  Callback for Supervisor.
+  """
   def start_link(opts) do
     GenServer.start_link(__MODULE__, :ok, opts)
   end
@@ -75,7 +185,6 @@ defmodule BeamCraft.GameServer do
 
     {:reply, reply, next_state}
   end
-
 
   def handle_call({:send_message, message}, {from_pid, _from_ref}, state) do
     {sender, _} = player_by_pid(state, from_pid)
@@ -154,46 +263,9 @@ defmodule BeamCraft.GameServer do
     {:reply, :ok, new_state}
   end
 
-  # fetching map details
   def handle_call({:get_map_details}, {_from_ref, _from_pid}, state) do
     reply = BeamCraft.MapServer.get_map
     {:reply, reply, state}
-  end
-
-  ## client stuff
-  def login(username, password) do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:login, username, password})
-  end
-
-  def send_message(message) do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:send_message, message})
-  end
-
-  def update_position(x, y, z, yaw, pitch) do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:update_position, x, y, z, pitch, yaw})
-  end
-
-  def create_block(x, y, z, block_type) do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:create_block, x, y, z, block_type})
-  end
-
-  def destroy_block(x, y, z, block_type) do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:destroy_block, x, y, z, block_type})
-  end
-
-  def logout() do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:logout})
-  end
-
-  def get_map_details do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call( server_pid, {:get_map_details})
   end
 
   # Internal helpers
@@ -204,6 +276,37 @@ defmodule BeamCraft.GameServer do
     {sender, sender_idx}
   end
 
+  defp teleport_player( state, player, x, y, z) do
+    {old_player, player_idx} = player_by_pid(state, player.pid)
+    new_player = %{ old_player | x: x, y: y, z: z }
+    send_packet_to_player(state, player, player_to_update_position_msg_for_player(new_player))
+    send_packet_to_all(state, player_to_update_position_msg(new_player))
+    %{ state | clients: List.replace_at(state.clients, player_idx, new_player)}
+  end
+  
+  defp classify_message(msg) do
+    parsed = String.split( msg, ~r{\s+}, trim: true)
+    case parsed do
+      ["/ping"] -> {:msg_ping}
+      ["/whereami"]-> {:msg_whereami}
+      ["/teleport",rawx,rawy,rawz | _rest] ->
+        case [Float.parse(rawx),Float.parse(rawy), Float.parse(rawz)] do
+          [{x,_},{y,_},{z,_}] ->
+            {:msg_teleport, x, y, z}
+          _ ->
+            {:malformed_teleport}
+        end
+      ["/teleport"|_rest]->
+        {:malformed_teleport}
+      ["/whisper", user_to |_rest] ->
+        clean_msg = msg |> String.trim_leading("/whisper #{user_to}")
+        {:msg_whisper, user_to, clean_msg}
+      ["/whisper" | _rest] ->
+        {:malformed_whisper}
+      _ -> {:msg_normal, msg}
+    end
+  end
+  
   defp player_by_username(state, username) do
     case Enum.find_index(state.clients, fn(c) -> c.username == username end) do
       nil ->
@@ -218,7 +321,7 @@ defmodule BeamCraft.GameServer do
     send(to.pid, {:send_packet, msg})
   end
 
-  defp send_chat_to_players( state, from, message ) do
+  defp send_chat_to_players(state, from, message) do
     msg = {:message_player, from.player_id, message}
     send_packet_to_all(state, msg)
   end

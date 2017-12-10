@@ -7,6 +7,19 @@ defmodule BeamCraft.Protocol do
   @moduledoc """
   This module impliments a ranch protcol capable of communicating with
   Minecraft classic clients.
+
+  It communicates with `BeamCraft.GameServer` to send and recive updates to
+  the game state. 
+
+  Messages decoded (using `BeamCraft.DecodingHelpers.decode_packet/1`) are translated to:
+  * Login -> `BeamCraft.GameServer.login/2`
+  * Block Update -> either `BeamCraft.GameServer.create_block/4` or `BeamCraft.GameServer.destroy_block/4`
+  * Player Position -> `BeamCraft.GameServer.update_position/5`
+  * Chat Message -> `BeamCraft.GameServer.send_message/1`
+
+  When the process recives a messages in the form of `{:send_packet, payload}`, it
+  invokes `BeamCraft.EncodingHelpers.encode_packet/1` and sends the resulting binary
+  to the connected client.
   """
 
   def start_link(ref, socket, transport, _opts) do
@@ -14,6 +27,12 @@ defmodule BeamCraft.Protocol do
     {:ok, pid}
   end
 
+  @doc """
+  Initialize function for the process.
+
+  This accepts the socket from ranch, sets `acive: :once`
+  on the socket, then enters its main loop.
+  """
   def init(ref, socket, transport) do
     :ok = :ranch.accept_ack(ref)
 
