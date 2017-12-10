@@ -8,6 +8,12 @@ defmodule EncodingHelpersTest do
     assert expected == BeamCraft.EncodingHelpers.encode_packet(given)
   end
 
+  test "encoding a player ping packet" do
+    expected = <<1>>
+    given = {:ping}
+
+    assert expected == BeamCraft.EncodingHelpers.encode_packet(given)
+  end
 
   test "encoding a map initalize packet" do
     expected = <<2>>
