@@ -7,8 +7,12 @@ defmodule BeamCraft.GameServer do
     defstruct [:pid, :player_id, :username, :x, :y, :z, :pitch, :yaw, :player_type]
   end
 
+  defmodule PlayerAccount do
+    defstruct [:username, :x, :y, :z, :yaw, :pitch, :player_type]
+  end
+
   defmodule State do
-    defstruct clients: [], player_id_pool: (for i <- 1..127, do: i)
+    defstruct clients: [], player_id_pool: (for i <- 1..127, do: i), player_table: :player_table
   end
 
   def start_link(opts) do
@@ -16,6 +20,7 @@ defmodule BeamCraft.GameServer do
   end
 
   def init(:ok) do
+    :ets.new(:player_table, [:named_table, :ordered_set])
     :erlang.send_after(@tick_rate, self(), :tick)
     {:ok, %State{}}
   end
@@ -35,9 +40,29 @@ defmodule BeamCraft.GameServer do
 
   # handle login
   def handle_call({:login, username, _password}, {from_pid, _from_ref}, %{player_id_pool: [player_id|rest_pool]} = state) do
-    {spawn_x, spawn_y, spawn_z} = BeamCraft.MapServer.get_default_spawn()
-
-    player = %Player{pid: from_pid, player_id: player_id, username: username, x: spawn_x, y: spawn_y, z: spawn_z, pitch: 0, yaw: 0, player_type: :regular}
+    player = case :ets.lookup(state.player_table, {username}) do
+      [] ->
+        {spawn_x, spawn_y, spawn_z} = BeamCraft.MapServer.get_default_spawn()
+        %Player{pid: from_pid,
+                     player_id: player_id,
+                     username: username,
+                     x: spawn_x,
+                     y: spawn_y,
+                     z: spawn_z,
+                     pitch: 0,
+                     yaw: 0,
+                     player_type: :regular}
+      [{{username},%PlayerAccount{} = account}] ->
+        %Player{     pid: from_pid,
+                     player_id: player_id,
+                     username: username,
+                     x: account.x,
+                     y: account.y,
+                     z: account.z,
+                     yaw: account.yaw,
+                     pitch: account.pitch,
+                     player_type: account.player_type}
+    end
 
     # Tell every connected client that a new player has joined
     send_packet_to_all(state, player_to_spawn_msg(player))
@@ -89,6 +114,13 @@ defmodule BeamCraft.GameServer do
   def handle_call({:logout}, {from_pid, _from_ref}, state) do
     {sender, sender_idx} = player_by_pid(state, from_pid)
 
+    :ets.insert(state.player_table, {{sender.username}, %PlayerAccount{
+      username: sender.username,
+      x: sender.x, y: sender.y, z: sender.z,
+      pitch: sender.pitch, yaw: sender.yaw,
+      player_type: sender.player_type
+    }})
+
     new_state = %{state | clients: List.delete_at(state.clients, sender_idx), player_id_pool: [sender.player_id] ++ state.player_id_pool }
     send_packet_to_all(new_state, {:despawn_player, sender.player_id})
 
@@ -138,7 +170,6 @@ defmodule BeamCraft.GameServer do
   end
 
   # Internal helpers
-
   defp player_by_pid(state, pid) do
     sender_idx = Enum.find_index(state.clients, fn(c) -> c.pid == pid end)
     sender = Enum.at(state.clients, sender_idx)
