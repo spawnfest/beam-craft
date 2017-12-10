@@ -1,6 +1,6 @@
 defmodule BeamCraft.EncodingHelpers do
   @moduledoc """
-  Utility methods used by BeamCraft.Protocol to encode packets received
+  Utility methods used by `BeamCraft.Protocol` to encode packets received
   from the client. A reference describing the structure of each packet
   is available at [wiki.vg](http://wiki.vg/Classic_Protocol).
 
