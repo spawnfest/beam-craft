@@ -55,16 +55,9 @@ defmodule BeamCraft.MapServer do
     blocks = :ets.match(state.map_table, {:'$1', block_type})
       |> Enum.flat_map(fn(x)->x end)
 
-    #IO.puts "Blocks of type #{block_type}, found #{blocks |> length}"
-
-    #IO.puts "BOCKS #{inspect blocks}"
-
     raw_adj_blocks = for {x,y,z} <- blocks do
       adjacent_blocks( x,y,z, state.width, state.height, state.length )
     end
-
-#    IO.puts "BOCKS #{inspect raw_adj_blocks}"
-
     adj_blocks =  raw_adj_blocks |> Enum.flat_map(fn(x)->x end) |> Enum.uniq()
 
     {:reply, adj_blocks, state}
