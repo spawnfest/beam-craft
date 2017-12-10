@@ -94,7 +94,7 @@ defmodule BeamCraft.EncodingHelpers do
     raise "Can't build packet with `#{inspect arg}`"
   end
 
-  @spec chunk_map(list(integer)) :: list(binary)
+  @spec chunk_map(binary) :: [binary]
   @doc """
   Takes a raw map array and converts it into a list of map chunk packets to send to
   the client.
@@ -107,6 +107,7 @@ defmodule BeamCraft.EncodingHelpers do
     for {chunk, index} <- Enum.with_index(chunks), do: encode_packet({:map_chunk, chunk, index})
   end
 
+  @spec chunk_map(binary, list(binary)) :: list(binary)
   defp chunk_map(data, results) when byte_size(data) > @chunk_size do
     head = :binary.part(data, 0, @chunk_size)
     tail = :binary.part(data, @chunk_size, byte_size(data) - @chunk_size)
