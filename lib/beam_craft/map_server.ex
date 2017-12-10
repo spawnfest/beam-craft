@@ -4,7 +4,63 @@ defmodule BeamCraft.MapServer do
 
   @moduledoc """
   MapServer maintains the state of the map, and runs the logic needed for water to flow automaticly.
+
+  This really wants to be started before other gameservers, since initialization can take a bit.
   """
+
+  ###############################
+  ## Public API
+  ###############################
+
+  @doc """
+    Get the current map ETS table munged into a binary.
+
+    Each byte corresponds to a single block.
+    Layout is:
+
+    [[xz slice[x row]]]
+  """
+  def get_map() do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:get_map})
+  end
+
+  @doc """
+    Get the default spawn location for this map.
+
+    Return is of the form `{x, y, z}`.
+  """
+  def get_default_spawn() do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:get_default_spawn})
+  end
+
+
+  @doc """
+    Set a block at a position to a given type.
+
+    Return is `:ok`.
+  """
+  def set_block(x, y, z, block_type) do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:set_block, x, y, z, block_type})
+  end
+
+  @doc """
+    Runs the block transforms, if any, that're available.
+
+    This handles things like propogating water, setting fire, and so forth.
+
+    Return is of form `{:ok, []}` or `{:ok, [{:set_block, x, y, z, block_type},...]}`
+  """
+  def eval_block_transforms() do
+    server_pid = :erlang.whereis(__MODULE__)
+    GenServer.call(server_pid, {:eval_block_transforms})
+  end
+
+  ###############################
+  ## Defines
+  ###############################
 
   # Number of blocks to evaluate each time we are requested to do so
   @blocks_per_tick 20
@@ -31,8 +87,13 @@ defmodule BeamCraft.MapServer do
   @map_height 64
 
   defmodule State do
+    @moduledoc false
     defstruct map_table: :map_table, length: 512, width: 512, height: 64
   end
+
+  ###############################
+  ## Genserver
+  ###############################
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, :ok, opts)
@@ -79,26 +140,13 @@ defmodule BeamCraft.MapServer do
     end
   end
 
-  def get_map() do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:get_map})
-  end
+  ###############################
+  ## Private helpers
+  ###############################
 
-  def get_default_spawn() do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:get_default_spawn})
-  end
-
-  def set_block(x, y, z, block_type) do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:set_block, x, y, z, block_type})
-  end
-
-  def eval_block_transforms() do
-    server_pid = :erlang.whereis(__MODULE__)
-    GenServer.call(server_pid, {:eval_block_transforms})
-  end
-
+  #
+  # Generation helpers
+  #
   defp on_border?(x,y,z) do
     y + 2 < (@map_height/2) && (
      z == 0 || z == @map_length-1
@@ -155,6 +203,10 @@ defmodule BeamCraft.MapServer do
     end)
   end
 
+  #
+  # Block helpers
+  #
+
   defp set_block(state, x, y, z, block_type) do
     [{{^y, ^z}, rle_col}] = :ets.lookup(state.map_table, {y,z})
 
@@ -200,15 +252,18 @@ defmodule BeamCraft.MapServer do
 
     updates = Enum.map(valid_updates, fn [x, y, z, from, to] ->
       cond do
-	to == @flowing_water ->
-	  :ets.insert(state.map_table, {{x, y, z, to}, @still_water})
-	  [set_block(state, x, y, z, to)]
-	from == @flowing_water && to == @still_water ->
-	  adjacent_air = adjacent_blocks(state, x, y, z, :look_down) |> Enum.filter(fn {_, _, _, type} -> type == @air end)
-	  for {gx, gy, gz, _} <- adjacent_air, do: :ets.insert(state.map_table, {{gx, gy, gz, @flowing_water}, @flowing_water})
-	  [set_block(state, x, y, z, to)] ++ (for {x, y, z, _} <- adjacent_air, do: set_block(state, x, y, z, @flowing_water))
-	true ->
-	  [set_block(state, x, y, z, to)]
+	     to == @flowing_water ->
+	       :ets.insert(state.map_table, {{x, y, z, to}, @still_water})
+	       [set_block(state, x, y, z, to)]
+	     from == @flowing_water && to == @still_water ->
+	       adjacent_air = adjacent_blocks(state, x, y, z, :look_down)
+                        |> Enum.filter(fn {_, _, _, type} -> type == @air end)
+	       for {gx, gy, gz, _} <- adjacent_air do
+          :ets.insert(state.map_table, {{gx, gy, gz, @flowing_water}, @flowing_water})
+         end
+	       [set_block(state, x, y, z, to)] ++ (for {x, y, z, _} <- adjacent_air, do: set_block(state, x, y, z, @flowing_water))
+	     true ->
+	       [set_block(state, x, y, z, to)]
       end
     end)
 
